@@ -12,11 +12,11 @@
         android:name="android.hardware.bluetooth_le"
         android:required="true" />
 
-    <!--    <application>-->
-    <!--        <service-->
-    <!--            android:name=".BluetoothService"-->
-    <!--            android:enabled="true"-->
-    <!--            android:exported="false" />-->
-    <!--    </application>-->
+    <application>
+        <service
+            android:name=".BluetoothService"
+            android:enabled="true"
+            android:exported="false" />
+    </application>
 </manifest>
 
