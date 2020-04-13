@@ -34,15 +34,14 @@ enum class MemoType(val t: UByte) {
 class Report(
     internal val rvk: Ed25519PublicKey,
     private val tckBytes: ByteArray,
-    private val j1: UShort,
-    private val j2: UShort,
+    private val j1: KeyIndex,
+    private val j2: KeyIndex,
     val memoType: MemoType,
     val memoData: ByteArray
 ) {
     init {
         require(tckBytes.size == 32) { "tckBytes must be 32 bytes, was ${tckBytes.size}" }
-        if (j1 == UShort.MIN_VALUE) throw InvalidReportIndex()
-        if (j2 <= j1) throw InvalidReportIndex()
+        if (j1.short == 0.toShort()) throw InvalidReportIndex()
     }
 
     internal fun sizeHint(): Int {
@@ -65,8 +64,8 @@ class Report(
 
             val rvk = read32(buf)
             val tckBytes = read32(buf)
-            val j1 = buf.short.toUShort()
-            val j2 = buf.short.toUShort()
+            val j1 = KeyIndex(buf.short)
+            val j2 = KeyIndex(buf.short)
             val memoType = MemoType.fromByte(buf.get())
             val memoData = readCompactVec(buf)
 
@@ -91,8 +90,8 @@ class Report(
 
         buf.put(rvk.toByteArray())
         buf.put(tckBytes)
-        buf.putShort(j1.toShort())
-        buf.putShort(j2.toShort())
+        buf.putShort(j1.short)
+        buf.putShort(j2.short)
         buf.put(memoType.t.toByte())
         buf.put(memoLen)
         buf.put(memoData)
@@ -102,11 +101,11 @@ class Report(
 
     class TemporaryContactNumberIterator(
         private var tck: TemporaryContactKey,
-        private val end: UShort
+        private val end: KeyIndex
     ) :
         Iterator<TemporaryContactNumber> {
         override fun hasNext(): Boolean {
-            return tck.index < end
+            return tck.index.uShort < end.uShort
         }
 
         override fun next(): TemporaryContactNumber {
@@ -174,8 +173,8 @@ fun ReportAuthorizationKey.createReport(
     val report = Report(
         rvk,
         tck.tckBytes,
-        j1Coerced,
-        j2,
+        KeyIndex(j1Coerced.toShort()),
+        KeyIndex(j2.toShort()),
         memoType,
         memoData
     )

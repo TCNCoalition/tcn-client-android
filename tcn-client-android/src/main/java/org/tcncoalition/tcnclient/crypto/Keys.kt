@@ -31,19 +31,17 @@ class ReportAuthorizationKey(internal val rak: Ed25519PrivateKey) {
     }
 
     /** The initial temporary contact key derived from this report authorization key. */
-    @ExperimentalUnsignedTypes
     val initialTemporaryContactKey: TemporaryContactKey by lazy {
         tck0.ratchet()!!
     }
 
     /** This is internal because tck0 shouldn't be used to generate a tcn. */
-    @ExperimentalUnsignedTypes
     internal val tck0: TemporaryContactKey
         get() {
             val h = MessageDigest.getInstance("SHA-256")
             h.update(H_TCK_DOMAIN_SEPARATOR)
             h.update(rak.toByteArray())
-            return TemporaryContactKey(UShort.MIN_VALUE, rvk, h.digest())
+            return TemporaryContactKey(KeyIndex(0), rvk, h.digest())
         }
 }
 
@@ -54,10 +52,43 @@ class TemporaryContactNumber internal constructor(val bytes: ByteArray) {
     }
 }
 
+/**
+ * The index of a specific [TemporaryContactKey].
+ *
+ * Represents a value between zero and `2^16 - 1`.
+ */
+class KeyIndex(internal val short: Short) {
+    @ExperimentalUnsignedTypes
+    internal val uShort = short.toUShort()
+
+    internal val bytes: ByteArray
+        get() {
+            val buf = ByteBuffer.allocate(2)
+            buf.order(ByteOrder.LITTLE_ENDIAN)
+            buf.putShort(short)
+            return buf.array()
+        }
+
+    /** Returns `null` if the increment would cause the index to wrap around to zero. */
+    fun checkedInc(): KeyIndex? {
+        // We are representing the index internally as a Short, so we rely on
+        // wrapping behaviour of Short.inc() to reach half of the index space.
+        val nextIndex = short.inc()
+
+        // If we arrive back at zero, we have wrapped the equivalent UShort.
+        return if (nextIndex != 0.toShort()) {
+            KeyIndex(nextIndex)
+        } else {
+            null
+        }
+    }
+
+    internal fun dec() = KeyIndex(short.dec())
+}
+
 /** A ratcheting key used to derive temporary contact numbers. */
-@ExperimentalUnsignedTypes
 class TemporaryContactKey(
-    internal val index: UShort,
+    internal val index: KeyIndex,
     private val rvk: Ed25519PublicKey,
     internal val tckBytes: ByteArray
 ) {
@@ -71,7 +102,7 @@ class TemporaryContactKey(
             val buf = ByteBuffer.wrap(bytes)
             buf.order(ByteOrder.LITTLE_ENDIAN)
 
-            val index = buf.short.toUShort()
+            val index = KeyIndex(buf.short)
             val rvk = read32(buf)
             val tckBytes = read32(buf)
 
@@ -84,7 +115,7 @@ class TemporaryContactKey(
         val buf = ByteBuffer.allocate(2 + 32 + 32)
         buf.order(ByteOrder.LITTLE_ENDIAN)
 
-        buf.putShort(index.toShort())
+        buf.putShort(index.short)
         buf.put(rvk.toByteArray())
         buf.put(tckBytes)
 
@@ -97,8 +128,7 @@ class TemporaryContactKey(
     val temporaryContactNumber: TemporaryContactNumber by lazy {
         val h = MessageDigest.getInstance("SHA-256")
         h.update(H_TCN_DOMAIN_SEPARATOR)
-        h.update(index.toByte())
-        h.update(index.toUInt().shr(8).toByte())
+        h.update(index.bytes)
         h.update(tckBytes)
         TemporaryContactNumber(h.digest().sliceArray(0..15))
     }
@@ -112,11 +142,7 @@ class TemporaryContactKey(
         if (ratcheted) throw IllegalStateException("key has already been ratcheted")
         ratcheted = true
 
-        val nextIndex = index.inc()
-        return if (nextIndex < index) {
-            // Wrapped around
-            null
-        } else {
+        return index.checkedInc()?.let { nextIndex ->
             val h = MessageDigest.getInstance("SHA-256")
             h.update(H_TCK_DOMAIN_SEPARATOR)
             h.update(rvk.toByteArray())

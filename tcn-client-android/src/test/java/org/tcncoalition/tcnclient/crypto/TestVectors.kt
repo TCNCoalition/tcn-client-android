@@ -43,7 +43,7 @@ class TestVectors {
         var tck = rak.initialTemporaryContactKey
 
         for (i in 1..9) {
-            assertEquals(i.toUShort(), tck.index)
+            assertEquals(i.toShort(), tck.index.short)
             assertEquals(expectedTckBytes[i - 1], tck.tckBytes.bytesToHex())
             assertEquals(expectedTcn[i - 1], tck.temporaryContactNumber.bytes.bytesToHex())
 
