@@ -46,9 +46,24 @@ class ReportAuthorizationKey(internal val rak: Ed25519PrivateKey) {
 }
 
 /** A pseudorandom 128-bit value broadcast to nearby devices over Bluetooth. */
-class TemporaryContactNumber internal constructor(val bytes: ByteArray) {
+data class TemporaryContactNumber internal constructor(val bytes: ByteArray) {
     init {
         require(bytes.size == 16) { "TCN must be 16 bytes, was ${bytes.size}" }
+    }
+
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (javaClass != other?.javaClass) return false
+
+        other as TemporaryContactNumber
+
+        if (!bytes.contentEquals(other.bytes)) return false
+
+        return true
+    }
+
+    override fun hashCode(): Int {
+        return bytes.contentHashCode()
     }
 }
 
