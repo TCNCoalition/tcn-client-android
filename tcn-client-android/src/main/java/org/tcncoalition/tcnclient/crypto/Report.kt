@@ -60,21 +60,14 @@ class Report(
         internal fun fromByteBuffer(buf: ByteBuffer): Report {
             buf.order(ByteOrder.LITTLE_ENDIAN)
 
-            val rvk = read32(buf)
+            val rvk = Ed25519PublicKey.fromByteArray(read32(buf))
             val tckBytes = read32(buf)
             val j1 = KeyIndex(buf.short)
             val j2 = KeyIndex(buf.short)
             val memoType = MemoType.fromByte(buf.get())
             val memoData = readCompactVec(buf)
 
-            return Report(
-                Ed25519PublicKey.fromByteArray(rvk),
-                tckBytes,
-                j1,
-                j2,
-                memoType,
-                memoData
-            )
+            return Report(rvk, tckBytes, j1, j2, memoType, memoData)
         }
     }
 
@@ -164,7 +157,7 @@ fun ReportAuthorizationKey.createReport(
     // Recompute tck_{j1 - 1}. This requires recomputing j1 - 1 hashes, but
     // creating reports is done infrequently and it means we don't force the
     // caller to have saved all intermediate hashes.
-    var tck = tck0;
+    var tck = tck0
     for (i in 0 until j1Coerced.toInt() - 1) {
         tck = tck.ratchet()!!
     }
@@ -187,8 +180,8 @@ class SignedReport(private val report: Report, private val signature: Ed25519Sig
         fun fromByteArray(bytes: ByteArray): SignedReport {
             val buf = ByteBuffer.wrap(bytes)
             val report = Report.fromByteBuffer(buf.slice())
-            val signature = read64(buf)
-            return SignedReport(report, Ed25519Signature.fromByteArray(signature))
+            val signature = Ed25519Signature.fromByteArray(read64(buf))
+            return SignedReport(report, signature)
         }
     }
 

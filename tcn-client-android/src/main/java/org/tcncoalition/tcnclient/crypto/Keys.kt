@@ -20,8 +20,8 @@ class ReportAuthorizationKey(internal val rak: Ed25519PrivateKey) {
         /** Reads a [ReportAuthorizationKey] from [bytes]. */
         fun fromByteArray(bytes: ByteArray): ReportAuthorizationKey {
             val buf = ByteBuffer.wrap(bytes)
-            val rak = read32(buf)
-            return ReportAuthorizationKey(Ed25519PrivateKey.fromByteArray(rak))
+            val rak = Ed25519PrivateKey.fromByteArray(read32(buf))
+            return ReportAuthorizationKey(rak)
         }
     }
 
@@ -103,10 +103,10 @@ class TemporaryContactKey(
             buf.order(ByteOrder.LITTLE_ENDIAN)
 
             val index = KeyIndex(buf.short)
-            val rvk = read32(buf)
+            val rvk = Ed25519PublicKey.fromByteArray(read32(buf))
             val tckBytes = read32(buf)
 
-            return TemporaryContactKey(index, Ed25519PublicKey.fromByteArray(rvk), tckBytes)
+            return TemporaryContactKey(index, rvk, tckBytes)
         }
     }
 
