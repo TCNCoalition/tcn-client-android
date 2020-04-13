@@ -1,14 +1,16 @@
-package org.tcncoalition.tcnclient
+package org.tcncoalition.tcnclient.bluetooth
 
-import android.bluetooth.le.*
+import android.bluetooth.le.BluetoothLeScanner
+import android.bluetooth.le.ScanCallback
+import android.bluetooth.le.ScanFilter
+import android.bluetooth.le.ScanResult
+import android.bluetooth.le.ScanSettings
 import android.content.Context
 import android.os.Build
 import android.os.ParcelUuid
 import android.util.Log
 import androidx.annotation.RequiresApi
-import org.tcncoalition.tcnclient.cen.CenVisitor
-import org.tcncoalition.tcnclient.cen.ObservedCen
-import java.util.*
+import java.util.UUID
 
 /**
  * CENScanner
@@ -23,16 +25,15 @@ import java.util.*
  * @param cenVisitor The visitor that handles the appropriate CEN
  *
  */
-@RequiresApi(Build.VERSION_CODES.LOLLIPOP)
-class CenScanner(
+class TcnScanner(
     private val ctx: Context,
     private val scanner: BluetoothLeScanner,
     private val serviceUUID: UUID,
-    private val cenVisitor: CenVisitor
+    tcnCallback: TcnBluetoothServiceCallback
 ) {
 
     companion object {
-        private const val TAG = "libcontacttracing"
+        private const val TAG = "CenScanner"
         private const val SECONDS_TO_MS = 1000
     }
 
@@ -51,17 +52,16 @@ class CenScanner(
 
             Log.d(TAG, "onBatchScanResults results=$results")
 
-            results?.forEach next_scan@{
+            results?.forEach for_each@{
 
                 // if the scanRecord is null or if there is no data,
                 // we skip over that result as it does not provide any benefit
                 // as we may have picked up a stray BLE device
-                val scanRecord = it.scanRecord ?: return@next_scan
-                val data = scanRecord.serviceData[
-                        ParcelUuid(serviceUUID)]?.toUUID()?.toBytes() ?: return@next_scan
+                val scanRecord = it.scanRecord ?: return@for_each
+                val tcn = scanRecord.serviceData[
+                    ParcelUuid(serviceUUID)] ?: return@for_each
 
-                // handle contact event
-                cenVisitor.visit(ObservedCen(data))
+                tcnCallback.onTcnFound(tcn)
             }
         }
     }
@@ -86,15 +86,18 @@ class CenScanner(
             ScanFilter.Builder().setServiceUuid(ParcelUuid(it)).build()
         }
 
-        // we use low power scan mode to conserve battery.
-        // NOTE: Although it would be nice to have setMatchMode and setNumOfMatches
-        // configured, that requires API Level 23, instead of API Level 21
-        // which will cut out 15% of all android users. So until this becomes a problem,
-        // its best to not configure those settings and include the most amount of people
-        val scanSettings = ScanSettings.Builder()
-            .setScanMode(ScanSettings.SCAN_MODE_LOW_POWER)
-            .setReportDelay(reportDelaySeconds * SECONDS_TO_MS)
-            .build()
+        val scanSettings = ScanSettings.Builder().apply {
+            setScanMode(ScanSettings.SCAN_MODE_LOW_POWER)
+            //TODO: Use proper time conversion
+            setReportDelay(reportDelaySeconds * SECONDS_TO_MS)
+
+            @RequiresApi
+            if (Build.VERSION_CODES.M == Build.VERSION.SDK_INT) {
+                setCallbackType(ScanSettings.CALLBACK_TYPE_ALL_MATCHES)
+                setMatchMode(ScanSettings.MATCH_MODE_AGGRESSIVE)
+                setNumOfMatches(ScanSettings.MATCH_NUM_ONE_ADVERTISEMENT)
+            }
+        }.build()
 
         // The scan filter is incredibly important to allow
         // android to run scans in the background

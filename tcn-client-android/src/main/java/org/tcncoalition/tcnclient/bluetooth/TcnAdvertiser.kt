@@ -1,19 +1,23 @@
-package org.tcncoalition.tcnclient
+package org.tcncoalition.tcnclient.bluetooth
 
-import android.bluetooth.*
+import android.bluetooth.BluetoothDevice
+import android.bluetooth.BluetoothGatt
+import android.bluetooth.BluetoothGattCharacteristic
+import android.bluetooth.BluetoothGattServer
+import android.bluetooth.BluetoothGattServerCallback
+import android.bluetooth.BluetoothGattService
+import android.bluetooth.BluetoothManager
 import android.bluetooth.le.AdvertiseCallback
 import android.bluetooth.le.AdvertiseData
 import android.bluetooth.le.AdvertiseSettings
 import android.bluetooth.le.BluetoothLeAdvertiser
-import android.content.ContentValues
 import android.content.Context
 import android.os.Build
 import android.os.ParcelUuid
 import android.util.Log
 import androidx.annotation.RequiresApi
-import org.tcncoalition.tcnclient.cen.CenGenerator
-import org.tcncoalition.tcnclient.cen.CenVisitor
-import java.util.*
+import org.tcncoalition.tcnclient.TcnConstants
+import java.util.UUID
 
 /**
  * CENAdvertiserConfig
@@ -33,13 +37,12 @@ import java.util.*
  */
 
 @RequiresApi(Build.VERSION_CODES.LOLLIPOP)
-class CenAdvertiser(
+class TcnAdvertiser(
     private val ctx: Context,
     private val advertiser: BluetoothLeAdvertiser,
     private val serviceUUID: UUID,
     private val characteristicUUID: UUID,
-    private val cenVisitor: CenVisitor,
-    private val cenGenerator: CenGenerator
+    private val tcnCallback: TcnBluetoothServiceCallback
 ) {
 
     var bluetoothGattServer: BluetoothGattServer? = null
@@ -66,14 +69,11 @@ class CenAdvertiser(
             .setConnectable(true)
             .build()
 
-        val gencen = cenGenerator.generate()
-        cenVisitor.visit(gencen)
-
         // advertisement data
         val data = AdvertiseData.Builder()
             .setIncludeDeviceName(false)
             .addServiceUuid(ParcelUuid(serviceUUID))
-            .addServiceData(ParcelUuid(serviceUUID), gencen.data)
+            .addServiceData(ParcelUuid(serviceUUID), tcnCallback.generateTcn())
             .build()
 
         // create the GATTServer and open it
@@ -91,36 +91,49 @@ class CenAdvertiser(
     ): Boolean? {
         bluetoothGattServer = bluetoothManager.openGattServer(ctx,
             object : BluetoothGattServerCallback() {
-                override fun onCharacteristicReadRequest(
+                override fun onCharacteristicWriteRequest(
                     device: BluetoothDevice?,
                     requestId: Int,
+                    characteristic: BluetoothGattCharacteristic?,
+                    preparedWrite: Boolean,
+                    responseNeeded: Boolean,
                     offset: Int,
-                    characteristic: BluetoothGattCharacteristic?
+                    value: ByteArray?
                 ) {
-                    super.onCharacteristicReadRequest(device, requestId, offset, characteristic)
+                    var result = BluetoothGatt.GATT_SUCCESS
+                    try {
+                        if (characteristic?.uuid == TcnConstants.UUID_CHARACTERISTIC) {
+                            if (offset != 0) {
+                                result = BluetoothGatt.GATT_INVALID_OFFSET
+                                return
+                            }
 
-                    val result: Int?
-                    var value: ByteArray? = null
+                            if (value == null || value.size != 16) {
+                                result = BluetoothGatt.GATT_FAILURE
+                                return
+                            }
 
-                    when {
-                        offset != 0 -> {
-                            result = BluetoothGatt.GATT_INVALID_OFFSET
+                            tcnCallback.onTcnFound(value)
+                        } else {
+                            result = BluetoothGatt.GATT_FAILURE
                         }
-                        characteristic?.uuid == characteristicUUID -> {
-                            val cen = cenGenerator.generate()
-                            cenVisitor.visit(cen)
-                            value = cen.data
-                            result = BluetoothGatt.GATT_SUCCESS
+                    } catch (exception: Exception) {
+                        result = BluetoothGatt.GATT_FAILURE
+                    } finally {
+                        Log.i(
+                            TAG,
+                            "onCharacteristicWriteRequest result=$result device=$device requestId=$requestId characteristic=$characteristic preparedWrite=$preparedWrite responseNeeded=$responseNeeded offset=$offset value=$value"
+                        )
+                        if (responseNeeded) {
+                            bluetoothGattServer?.sendResponse(
+                                device,
+                                requestId,
+                                result,
+                                offset,
+                                null
+                            )
                         }
-                        else -> result = BluetoothGatt.GATT_FAILURE
                     }
-
-                    Log.i(
-                        ContentValues.TAG, "CENGattCallback result=$result device=$device " +
-                                "requestId=$requestId offset=$offset characteristic=$characteristic"
-                    )
-
-                    bluetoothGattServer?.sendResponse(device, requestId, result, offset, value)
                 }
             })
 
