@@ -193,8 +193,16 @@ class SignedReport(private val report: Report, private val signature: Ed25519Sig
         return buf.array()
     }
 
-    /** Verifies the source integrity of this report, producing `true` if successful. */
-    fun verify(): Boolean {
-        return report.rvk.verify(report.toByteArray(), signature)
+    /**
+     * Verifies the source integrity of this report, producing a [Report] if successful.
+     *
+     * Throws [ReportVerificationFailed] if the [SignedReport] is invalid.
+     */
+    fun verify(): Report {
+        if (report.rvk.verify(report.toByteArray(), signature)) {
+            return report
+        } else {
+            throw ReportVerificationFailed()
+        }
     }
 }

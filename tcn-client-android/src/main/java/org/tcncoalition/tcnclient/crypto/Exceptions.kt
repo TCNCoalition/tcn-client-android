@@ -8,3 +8,6 @@ class InvalidReportIndex : Exception("Invalid TCN index in report")
 
 /** An oversize memo field was supplied when creating a report. */
 class OversizeMemo(private val len: Int) : Exception("Oversize memo field: $len bytes")
+
+/** A report failed the source integrity check. */
+class ReportVerificationFailed : Exception("Report verification failed")
