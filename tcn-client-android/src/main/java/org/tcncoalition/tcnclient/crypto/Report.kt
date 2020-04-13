@@ -6,16 +6,15 @@ import java.nio.ByteBuffer
 import java.nio.ByteOrder
 
 /** Describes the intended type of the contents of a memo field. */
-@ExperimentalUnsignedTypes
-enum class MemoType(val t: UByte) {
+enum class MemoType(internal val t: Byte) {
     /** The CoEpi symptom self-report format, version 1 (TBD) */
-    CoEpiV1(0.toUByte()),
+    CoEpiV1(0),
 
     /** The CovidWatch test data format, version 1 (TBD) */
-    CovidWatchV1(1.toUByte()),
+    CovidWatchV1(1),
 
     /** Reserved for future use. */
-    Reserved(0xff.toUByte());
+    Reserved(-1);
 
     companion object Reader {
         /** Converts a byte into a [MemoType]. */
@@ -30,7 +29,6 @@ enum class MemoType(val t: UByte) {
 }
 
 /** A report of potential exposure. */
-@ExperimentalUnsignedTypes
 class Report(
     internal val rvk: Ed25519PublicKey,
     private val tckBytes: ByteArray,
@@ -92,7 +90,7 @@ class Report(
         buf.put(tckBytes)
         buf.putShort(j1.short)
         buf.putShort(j2.short)
-        buf.put(memoType.t.toByte())
+        buf.put(memoType.t)
         buf.put(memoLen)
         buf.put(memoData)
 
@@ -104,6 +102,7 @@ class Report(
         private val end: KeyIndex
     ) :
         Iterator<TemporaryContactNumber> {
+        @ExperimentalUnsignedTypes
         override fun hasNext(): Boolean {
             return tck.index.uShort < end.uShort
         }
@@ -182,7 +181,6 @@ fun ReportAuthorizationKey.createReport(
     return SignedReport(report, rak.expand().sign(report.toByteArray(), rvk))
 }
 
-@ExperimentalUnsignedTypes
 class SignedReport(private val report: Report, private val signature: Ed25519Signature) {
     companion object Reader {
         /** Reads a [SignedReport] from [bytes]. */
