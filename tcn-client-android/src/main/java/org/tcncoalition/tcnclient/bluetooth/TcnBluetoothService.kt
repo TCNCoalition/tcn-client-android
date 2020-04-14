@@ -54,8 +54,8 @@ class TcnBluetoothService : LifecycleService() {
         tcnAdvertiser = TcnAdvertiser(
             this@TcnBluetoothService,
             bluetoothAdapter.bluetoothLeAdvertiser,
-            CONTACT_EVENT_SERVICE,
-            CONTACT_EVENT_IDENTIFIER_CHARACTERISTIC,
+            TEMPORARY_CONTACT_NUMBER_SERVICE,
+            TEMPORARY_CONTACT_NUMBER_IDENTIFIER_CHARACTERISTIC,
             tcnCallback
         )
 
@@ -63,12 +63,12 @@ class TcnBluetoothService : LifecycleService() {
         tcnScanner = TcnScanner(
             this@TcnBluetoothService,
             bluetoothAdapter.bluetoothLeScanner,
-            CONTACT_EVENT_SERVICE,
+            TEMPORARY_CONTACT_NUMBER_SERVICE,
             tcnCallback
         )
 
-        tcnAdvertiser?.startAdvertiser(CONTACT_EVENT_SERVICE)
-        tcnScanner?.startScanning(arrayOf(CONTACT_EVENT_SERVICE), 10)
+        tcnAdvertiser?.startAdvertiser(TEMPORARY_CONTACT_NUMBER_SERVICE)
+        tcnScanner?.startScanning(arrayOf(TEMPORARY_CONTACT_NUMBER_SERVICE), 10)
     }
 
     fun updateCen() {
@@ -90,10 +90,10 @@ class TcnBluetoothService : LifecycleService() {
         const val NOTIFICATION_ID = 0
 
         // The string representation of the UUID for the primary peripheral service
-        val CONTACT_EVENT_SERVICE: UUID = UUID.fromString("0000C019-0000-1000-8000-00805F9B34FB")
+        val TEMPORARY_CONTACT_NUMBER_SERVICE: UUID = UUID.fromString("0000C019-0000-1000-8000-00805F9B34FB")
 
-        // The string representation of the UUID for the contact event identifier characteristic
-        val CONTACT_EVENT_IDENTIFIER_CHARACTERISTIC: UUID =
+        // The string representation of the UUID for the temporary contact number characteristic
+        val TEMPORARY_CONTACT_NUMBER_IDENTIFIER_CHARACTERISTIC: UUID =
             UUID.fromString("D61F4F27-3D6B-4B04-9E46-C9D2EA617F62")
     }
 }
