@@ -179,7 +179,7 @@ class SignedReport(private val report: Report, private val signature: Ed25519Sig
         /** Reads a [SignedReport] from [bytes]. */
         fun fromByteArray(bytes: ByteArray): SignedReport {
             val buf = ByteBuffer.wrap(bytes)
-            val report = Report.fromByteBuffer(buf.slice())
+            val report = Report.fromByteBuffer(buf)
             val signature = Ed25519Signature.fromByteArray(read64(buf))
             return SignedReport(report, signature)
         }
