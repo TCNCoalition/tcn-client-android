@@ -3,7 +3,12 @@ package org.tcncoalition.tcnclient.crypto
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Test
+import org.nield.kotlinstatistics.WeightedCoin
 import java.security.SecureRandom
+import kotlin.time.ExperimentalTime
+import kotlin.time.TimeSource
+import kotlin.time.measureTime
+import kotlin.time.measureTimedValue
 
 class BasicFunctionality {
     @ExperimentalUnsignedTypes
@@ -39,6 +44,78 @@ class BasicFunctionality {
         // Check that the recomputed TCNs match the originals.
         // The slice is offset by 1 because tcn_0 is not included.
         assertEquals(tcns.slice(20 - 1 until 90 - 1), recomputedTcns)
+    }
+
+    @ExperimentalTime
+    @ExperimentalUnsignedTypes
+    @Test
+    fun matchSet() {
+        // Simulate many users generating TCNs, some of them being observed,
+        // and comparison of observed TCNs against report data.
+
+        // Parameters.
+        val numReports = 10_000;
+        val tcnsPerReport = 24 * 60 / 15
+        val tcnObservation = WeightedCoin(0.001)
+
+        // Store observed TCNs.
+        val observedTcns = linkedSetOf<TemporaryContactNumber>()
+
+        // Generate some TCNs that will be reported.
+        val reports = (0 until numReports)
+            .map {
+                val rak = ReportAuthorizationKey(SecureRandom.getInstanceStrong());
+                var tck = rak.initialTemporaryContactKey;
+                (1 until tcnsPerReport).asSequence().map {
+                    if (tcnObservation.flip()) {
+                        observedTcns.add(tck.temporaryContactNumber);
+                    }
+                    tck = tck.ratchet()!! // tcnsPerReport < u16::MAX
+                }
+
+                rak.createReport(
+                    MemoType.CoEpiV1,
+                    ByteArray(0),
+                    1.toUShort(),
+                    tcnsPerReport.toUShort()
+                )
+            }
+
+        // The current observedTcns are exactly the ones that we expect will be reported.
+        val expectedReportedTcns = observedTcns.clone();
+
+        // Generate some extra TCNs that will not be reported.
+        run {
+            val rak = ReportAuthorizationKey(SecureRandom.getInstanceStrong());
+            var tck = rak.initialTemporaryContactKey
+            for (i in 1 until 60_000) {
+                observedTcns.add(tck.temporaryContactNumber);
+                tck = tck.ratchet()!! // 60_000 < u16::MAX
+            }
+        }
+
+        println("Expanding candidates")
+
+        val candidateTcns = TimeSource.Monotonic.measureTimedValue {
+            // Now expand the reports into a second set of candidates.
+            val candidateTcns = linkedSetOf<TemporaryContactNumber>()
+            for (signedReport in reports) {
+                val report = signedReport.verify()
+                candidateTcns.addAll(report.temporaryContactNumbers.asSequence())
+            }
+            candidateTcns
+        }
+
+        println("Comparing ${candidateTcns.value.size} candidates against ${observedTcns.size} observations")
+
+        val reportedTcns = TimeSource.Monotonic.measureTimedValue {
+            // Compute the intersection of the two sets.
+            candidateTcns.value.intersect(observedTcns)
+        }
+
+        assertEquals(reportedTcns.value, expectedReportedTcns)
+
+        println("Took ${candidateTcns.duration} (expansion) + ${reportedTcns.duration} (comparison) = ${candidateTcns.duration + reportedTcns.duration} (total)")
     }
 
     @ExperimentalUnsignedTypes
