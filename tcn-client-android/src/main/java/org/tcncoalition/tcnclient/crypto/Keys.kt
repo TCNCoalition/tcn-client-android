@@ -12,23 +12,32 @@ import java.security.MessageDigest
 import java.security.SecureRandom
 
 /** Authorizes publication of a report of potential exposure. */
-class ReportAuthorizationKey(internal val rak: Ed25519PrivateKey) {
+class ReportAuthorizationKey(internal val rak: Ed25519PrivateKey) : Writer {
     internal val rvk: Ed25519PublicKey = this.rak.derivePublic()
 
     /** Generates a new ReportAuthorizationKey. */
     constructor(random: SecureRandom) : this(Ed25519PrivateKey.generate(random))
 
-    companion object Reader {
-        /** Reads a [ReportAuthorizationKey] from [bytes]. */
-        fun fromByteArray(bytes: ByteArray): ReportAuthorizationKey {
-            val buf = ByteBuffer.wrap(bytes)
+    companion object : Reader<ReportAuthorizationKey> {
+        /** Reads a [ReportAuthorizationKey] from [buf]. */
+        override fun fromByteBuffer(buf: ByteBuffer): ReportAuthorizationKey {
             val rak = Ed25519PrivateKey.fromByteArray(buf.read32())
             return ReportAuthorizationKey(rak)
         }
     }
 
+    /** Returns the size that this [ReportAuthorizationKey] will serialize into. */
+    override fun sizeHint(): Int {
+        return 32
+    }
+
+    /** Serializes a [ReportAuthorizationKey] into [buf]. */
+    override fun toByteBuffer(buf: ByteBuffer) {
+        buf.put(rak.toByteArray())
+    }
+
     /** Serializes a [ReportAuthorizationKey] into a [ByteArray]. */
-    fun toByteArray(): ByteArray {
+    override fun toByteArray(): ByteArray {
         return rak.toByteArray()
     }
 
@@ -103,15 +112,18 @@ class TemporaryContactKey(
     internal val index: KeyIndex,
     private val rvk: Ed25519PublicKey,
     internal val tckBytes: ByteArray
-) {
+) : Writer {
     init {
         require(tckBytes.size == TCK_BYTES_LENGTH) { "tckBytes must be $TCK_BYTES_LENGTH bytes, was ${tckBytes.size}" }
     }
 
-    companion object Reader {
-        /** Reads a [TemporaryContactKey] from [bytes]. */
-        fun fromByteArray(bytes: ByteArray): TemporaryContactKey {
-            val buf = ByteBuffer.wrap(bytes)
+    companion object : Reader<TemporaryContactKey> {
+        /**
+         * Reads a [TemporaryContactKey] from [buf].
+         *
+         * The order of [buf] will be set to [ByteOrder.LITTLE_ENDIAN].
+         */
+        override fun fromByteBuffer(buf: ByteBuffer): TemporaryContactKey {
             buf.order(ByteOrder.LITTLE_ENDIAN)
 
             val index = KeyIndex(buf.short)
@@ -122,16 +134,21 @@ class TemporaryContactKey(
         }
     }
 
-    /** Serializes a [TemporaryContactKey] into a [ByteArray]. */
-    fun toByteArray(): ByteArray {
-        val buf = ByteBuffer.allocate(2 + 32 + TCK_BYTES_LENGTH)
-        buf.order(ByteOrder.LITTLE_ENDIAN)
+    /** Returns the size that this [TemporaryContactKey] will serialize into. */
+    override fun sizeHint(): Int {
+        return 2 + 32 + TCK_BYTES_LENGTH
+    }
 
+    /**
+     * Serializes a [TemporaryContactKey] into [buf].
+     *
+     * The order of [buf] will be set to [ByteOrder.LITTLE_ENDIAN].
+     */
+    override fun toByteBuffer(buf: ByteBuffer) {
+        buf.order(ByteOrder.LITTLE_ENDIAN)
         buf.putShort(index.short)
         buf.put(rvk.toByteArray())
         buf.put(tckBytes)
-
-        return buf.array()
     }
 
     private var ratcheted = false

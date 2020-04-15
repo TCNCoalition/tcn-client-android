@@ -17,9 +17,10 @@ enum class MemoType(internal val t: Byte) {
     /** Reserved for future use. */
     Reserved(-1);
 
-    companion object Reader {
+    companion object : Reader<MemoType> {
         /** Converts a byte into a [MemoType]. */
-        fun fromByte(t: Byte): MemoType {
+        override fun fromByteBuffer(buf: ByteBuffer): MemoType {
+            val t = buf.get()
             return when (t.toInt()) {
                 0 -> CoEpiV1
                 1 -> CovidWatchV1
@@ -37,49 +38,47 @@ class Report(
     private val j2: KeyIndex,
     val memoType: MemoType,
     val memoData: ByteArray
-) {
+) : Writer {
     init {
         require(tckBytes.size == TCK_BYTES_LENGTH) { "tckBytes must be $TCK_BYTES_LENGTH bytes, was ${tckBytes.size}" }
         if (j1.short == 0.toShort()) throw InvalidReportIndex()
     }
 
-    internal fun sizeHint(): Int {
-        return 32 + TCK_BYTES_LENGTH + 2 + 2 + 1 + 1 + memoData.size
-    }
-
-    companion object Reader {
-        /** Reads a [Report] from [bytes]. */
-        fun fromByteArray(bytes: ByteArray): Report {
-            return fromByteBuffer(ByteBuffer.wrap(bytes))
-        }
-
+    companion object : Reader<Report> {
         /**
          * Reads a [Report] from [buf].
          *
-         * The order of [buf] will be set too [ByteOrder.LITTLE_ENDIAN].
+         * The order of [buf] will be set to [ByteOrder.LITTLE_ENDIAN].
          */
-        internal fun fromByteBuffer(buf: ByteBuffer): Report {
+        override fun fromByteBuffer(buf: ByteBuffer): Report {
             buf.order(ByteOrder.LITTLE_ENDIAN)
 
             val rvk = Ed25519PublicKey.fromByteArray(buf.read32())
             val tckBytes = buf.read32()
             val j1 = KeyIndex(buf.short)
             val j2 = KeyIndex(buf.short)
-            val memoType = MemoType.fromByte(buf.get())
+            val memoType = MemoType.fromByteBuffer(buf)
             val memoData = buf.readCompactVec()
 
             return Report(rvk, tckBytes, j1, j2, memoType, memoData)
         }
     }
 
-    /** Serializes a [Report] into a [ByteArray]. */
-    fun toByteArray(): ByteArray {
+    /** Returns the size that this [Report] will serialize into. */
+    override fun sizeHint(): Int {
+        return 32 + TCK_BYTES_LENGTH + 2 + 2 + 1 + 1 + memoData.size
+    }
+
+    /**
+     * Serializes a [Report] into [buf].
+     *
+     * The order of [buf] will be set to [ByteOrder.LITTLE_ENDIAN].
+     */
+    override fun toByteBuffer(buf: ByteBuffer) {
         val memoLen = memoData.size.toByte()
         if (memoLen.toInt() != memoData.size) throw OversizeMemo(memoData.size)
 
-        val buf = ByteBuffer.allocate(sizeHint())
         buf.order(ByteOrder.LITTLE_ENDIAN)
-
         buf.put(rvk.toByteArray())
         buf.put(tckBytes)
         buf.putShort(j1.short)
@@ -87,8 +86,6 @@ class Report(
         buf.put(memoType.t)
         buf.put(memoLen)
         buf.put(memoData)
-
-        return buf.array()
     }
 
     class TemporaryContactNumberIterator(
@@ -175,23 +172,33 @@ fun ReportAuthorizationKey.createReport(
     return SignedReport(report, rak.expand().sign(report.toByteArray(), rvk))
 }
 
-class SignedReport(private val report: Report, private val signature: Ed25519Signature) {
-    companion object Reader {
-        /** Reads a [SignedReport] from [bytes]. */
-        fun fromByteArray(bytes: ByteArray): SignedReport {
-            val buf = ByteBuffer.wrap(bytes)
+class SignedReport(private val report: Report, private val signature: Ed25519Signature) : Writer {
+    companion object : Reader<SignedReport> {
+        /**
+         * Reads a [SignedReport] from [buf].
+         *
+         * The order of [buf] will be set to [ByteOrder.LITTLE_ENDIAN].
+         */
+        override fun fromByteBuffer(buf: ByteBuffer): SignedReport {
             val report = Report.fromByteBuffer(buf)
             val signature = Ed25519Signature.fromByteArray(buf.read64())
             return SignedReport(report, signature)
         }
     }
 
-    /** Serializes a [SignedReport] into a [ByteArray]. */
-    fun toByteArray(): ByteArray {
-        val buf = ByteBuffer.allocate(report.sizeHint() + 64)
+    /** Returns the size that this [SignedReport] will serialize into. */
+    override fun sizeHint(): Int {
+        return report.sizeHint() + 64
+    }
+
+    /**
+     * Serializes a [SignedReport] into [buf].
+     *
+     * The order of [buf] will be set to [ByteOrder.LITTLE_ENDIAN].
+     */
+    override fun toByteBuffer(buf: ByteBuffer) {
         buf.put(report.toByteArray())
         buf.put(signature.toByteArray())
-        return buf.array()
     }
 
     /**
