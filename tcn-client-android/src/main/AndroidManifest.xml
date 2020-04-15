@@ -14,7 +14,7 @@
 
     <application>
         <service
-            android:name=".bluetooth.TcnBluetoothService"
+            android:name=".bluetooth.TcnLifecycleService"
             android:enabled="true"
             android:exported="false" />
     </application>
