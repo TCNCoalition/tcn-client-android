@@ -2,6 +2,7 @@ package org.tcncoalition.tcnclient.crypto
 
 import cafe.cryptography.ed25519.Ed25519PublicKey
 import cafe.cryptography.ed25519.Ed25519Signature
+import org.tcncoalition.tcnclient.TcnConstants.TCK_BYTES_LENGTH
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 
@@ -38,12 +39,12 @@ class Report(
     val memoData: ByteArray
 ) {
     init {
-        require(tckBytes.size == 32) { "tckBytes must be 32 bytes, was ${tckBytes.size}" }
+        require(tckBytes.size == TCK_BYTES_LENGTH) { "tckBytes must be $TCK_BYTES_LENGTH bytes, was ${tckBytes.size}" }
         if (j1.short == 0.toShort()) throw InvalidReportIndex()
     }
 
     internal fun sizeHint(): Int {
-        return 32 + 32 + 2 + 2 + 1 + 1 + memoData.size
+        return 32 + TCK_BYTES_LENGTH + 2 + 2 + 1 + 1 + memoData.size
     }
 
     companion object Reader {

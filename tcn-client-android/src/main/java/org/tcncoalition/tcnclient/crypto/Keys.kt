@@ -4,6 +4,8 @@ import cafe.cryptography.ed25519.Ed25519PrivateKey
 import cafe.cryptography.ed25519.Ed25519PublicKey
 import org.tcncoalition.tcnclient.TcnConstants.H_TCK_DOMAIN_SEPARATOR
 import org.tcncoalition.tcnclient.TcnConstants.H_TCN_DOMAIN_SEPARATOR
+import org.tcncoalition.tcnclient.TcnConstants.TCK_BYTES_LENGTH
+import org.tcncoalition.tcnclient.TcnConstants.TCN_LENGTH
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.security.MessageDigest
@@ -48,7 +50,7 @@ class ReportAuthorizationKey(internal val rak: Ed25519PrivateKey) {
 /** A pseudorandom 128-bit value broadcast to nearby devices over Bluetooth. */
 data class TemporaryContactNumber internal constructor(val bytes: ByteArray) {
     init {
-        require(bytes.size == 16) { "TCN must be 16 bytes, was ${bytes.size}" }
+        require(bytes.size == TCN_LENGTH) { "TCN must be $TCN_LENGTH bytes, was ${bytes.size}" }
     }
 
     override fun equals(other: Any?): Boolean {
@@ -108,7 +110,7 @@ class TemporaryContactKey(
     internal val tckBytes: ByteArray
 ) {
     init {
-        require(tckBytes.size == 32) { "tckBytes must be 32 bytes, was ${tckBytes.size}" }
+        require(tckBytes.size == TCK_BYTES_LENGTH) { "tckBytes must be $TCK_BYTES_LENGTH bytes, was ${tckBytes.size}" }
     }
 
     companion object Reader {
@@ -127,7 +129,7 @@ class TemporaryContactKey(
 
     /** Serializes a [TemporaryContactKey] into a [ByteArray]. */
     fun toByteArray(): ByteArray {
-        val buf = ByteBuffer.allocate(2 + 32 + 32)
+        val buf = ByteBuffer.allocate(2 + 32 + TCK_BYTES_LENGTH)
         buf.order(ByteOrder.LITTLE_ENDIAN)
 
         buf.putShort(index.short)
@@ -145,7 +147,7 @@ class TemporaryContactKey(
         h.update(H_TCN_DOMAIN_SEPARATOR)
         h.update(index.bytes)
         h.update(tckBytes)
-        TemporaryContactNumber(h.digest().sliceArray(0..15))
+        TemporaryContactNumber(h.digest().sliceArray(0 until TCN_LENGTH))
     }
 
     /**
