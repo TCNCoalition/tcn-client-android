@@ -55,13 +55,8 @@ data class TemporaryContactNumber internal constructor(val bytes: ByteArray) {
 
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
-        if (javaClass != other?.javaClass) return false
-
-        other as TemporaryContactNumber
-
-        if (!bytes.contentEquals(other.bytes)) return false
-
-        return true
+        if (other as? TemporaryContactNumber == null) return false
+        return bytes.contentEquals(other.bytes)
     }
 
     override fun hashCode(): Int {
