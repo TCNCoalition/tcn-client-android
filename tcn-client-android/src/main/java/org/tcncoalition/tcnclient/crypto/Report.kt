@@ -61,12 +61,12 @@ class Report(
         internal fun fromByteBuffer(buf: ByteBuffer): Report {
             buf.order(ByteOrder.LITTLE_ENDIAN)
 
-            val rvk = Ed25519PublicKey.fromByteArray(read32(buf))
-            val tckBytes = read32(buf)
+            val rvk = Ed25519PublicKey.fromByteArray(buf.read32())
+            val tckBytes = buf.read32()
             val j1 = KeyIndex(buf.short)
             val j2 = KeyIndex(buf.short)
             val memoType = MemoType.fromByte(buf.get())
-            val memoData = readCompactVec(buf)
+            val memoData = buf.readCompactVec()
 
             return Report(rvk, tckBytes, j1, j2, memoType, memoData)
         }
@@ -181,7 +181,7 @@ class SignedReport(private val report: Report, private val signature: Ed25519Sig
         fun fromByteArray(bytes: ByteArray): SignedReport {
             val buf = ByteBuffer.wrap(bytes)
             val report = Report.fromByteBuffer(buf)
-            val signature = Ed25519Signature.fromByteArray(read64(buf))
+            val signature = Ed25519Signature.fromByteArray(buf.read64())
             return SignedReport(report, signature)
         }
     }
