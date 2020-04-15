@@ -26,4 +26,13 @@ object TcnConstants {
 
     /** The byte-length of the temporary contact number. */
     const val TEMPORARY_CONTACT_NUMBER_LENGTH: Int = 16
+
+    const val TCK_BYTES_LENGTH = 32;
+    const val TCN_LENGTH = 16;
+
+    private const val H_TCN_DOMAIN_SEPARATOR_STRING = "H_TCN"
+    val H_TCN_DOMAIN_SEPARATOR = H_TCN_DOMAIN_SEPARATOR_STRING.toByteArray(Charsets.UTF_8)
+
+    private const val H_TCK_DOMAIN_SEPARATOR_STRING = "H_TCK"
+    val H_TCK_DOMAIN_SEPARATOR = H_TCK_DOMAIN_SEPARATOR_STRING.toByteArray(Charsets.UTF_8)
 }
