@@ -32,10 +32,10 @@ enum class MemoType(internal val t: Byte) {
 
 /** A report of potential exposure. */
 class Report(
-    internal val rvk: Ed25519PublicKey,
-    private val tckBytes: ByteArray,
-    private val j1: KeyIndex,
-    private val j2: KeyIndex,
+    val rvk: Ed25519PublicKey,
+    val tckBytes: ByteArray,
+    val j1: KeyIndex,
+    val j2: KeyIndex,
     val memoType: MemoType,
     val memoData: ByteArray
 ) : Writer {
@@ -172,7 +172,7 @@ fun ReportAuthorizationKey.createReport(
     return SignedReport(report, rak.expand().sign(report.toByteArray(), rvk))
 }
 
-class SignedReport(private val report: Report, private val signature: Ed25519Signature) : Writer {
+class SignedReport(val report: Report, val signature: Ed25519Signature) : Writer {
     companion object : Reader<SignedReport> {
         /**
          * Reads a [SignedReport] from [buf].

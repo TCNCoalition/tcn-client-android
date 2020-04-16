@@ -78,9 +78,9 @@ data class TemporaryContactNumber internal constructor(val bytes: ByteArray) {
  *
  * Represents a value between zero and `2^16 - 1`.
  */
-class KeyIndex(internal val short: Short) {
+class KeyIndex(val short: Short) {
     @ExperimentalUnsignedTypes
-    internal val uShort = short.toUShort()
+    val uShort = short.toUShort()
 
     internal val bytes: ByteArray
         get() {
@@ -109,9 +109,9 @@ class KeyIndex(internal val short: Short) {
 
 /** A ratcheting key used to derive temporary contact numbers. */
 class TemporaryContactKey(
-    internal val index: KeyIndex,
-    private val rvk: Ed25519PublicKey,
-    internal val tckBytes: ByteArray
+    val index: KeyIndex,
+    val rvk: Ed25519PublicKey,
+    val tckBytes: ByteArray
 ) : Writer {
     init {
         require(tckBytes.size == TCK_BYTES_LENGTH) { "tckBytes must be $TCK_BYTES_LENGTH bytes, was ${tckBytes.size}" }
