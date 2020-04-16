@@ -15,6 +15,8 @@ import java.security.SecureRandom
 class ReportAuthorizationKey(internal val rak: Ed25519PrivateKey) : Writer {
     internal val rvk: Ed25519PublicKey = this.rak.derivePublic()
 
+    constructor() : this(Ed25519PrivateKey.generate(SecureRandom()))
+
     /** Generates a new ReportAuthorizationKey. */
     constructor(random: SecureRandom) : this(Ed25519PrivateKey.generate(random))
 
