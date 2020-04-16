@@ -227,8 +227,10 @@ class TcnBluetoothService(
                 Log.d(TAG, "result=$it")
 
                 val scanRecord = it.scanRecord ?: return@for_each
-                val tcn = scanRecord.serviceData[
+                val tcnServiceData = scanRecord.serviceData[
                         ParcelUuid(TcnConstants.UUID_SERVICE)] ?: return@for_each
+                if (tcnServiceData.size < TcnConstants.TEMPORARY_CONTACT_NUMBER_LENGTH) return
+                val tcn = tcnServiceData.sliceArray(0 until TcnConstants.TEMPORARY_CONTACT_NUMBER_LENGTH)
 
                 Log.d(TAG, "Did find TCN=${Base64.encodeToString(tcn, Base64.DEFAULT)}")
                 tcnCallback.onTcnFound(tcn)
