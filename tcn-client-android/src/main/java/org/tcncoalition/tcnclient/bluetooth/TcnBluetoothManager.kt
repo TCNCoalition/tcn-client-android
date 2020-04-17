@@ -53,16 +53,16 @@ class TcnBluetoothManager(
         if (isStarted) return
         isStarted = true
 
-        changeOwnTcn()
-        runChangeOwnTcnTimer()
-
         startScan()
-        startAdvertising()
         // Create the local GATTServer and open it once.
         initBleGattServer(
             (context.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager),
             TcnConstants.UUID_SERVICE
         )
+
+        // This starts advertising
+        changeOwnTcn()
+        runChangeOwnTcnTimer()
 
         runAdvertiseNextTcnTimer()
     }
@@ -116,8 +116,8 @@ class TcnBluetoothManager(
                     }
                 }
             },
-            TimeUnit.SECONDS.toMillis(10),
-            TimeUnit.SECONDS.toMillis(10)
+            TimeUnit.SECONDS.toMillis(20),
+            TimeUnit.SECONDS.toMillis(20)
         )
     }
 
