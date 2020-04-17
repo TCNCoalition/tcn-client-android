@@ -12,7 +12,7 @@
 
     <application>
         <service
-            android:name=".bluetooth.TcnLifecycleService"
+            android:name=".bluetooth.TcnBluetoothService"
             android:enabled="true"
             android:exported="false" />
     </application>
