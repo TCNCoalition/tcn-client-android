@@ -27,7 +27,7 @@ import java.util.UUID
 import java.util.concurrent.TimeUnit
 
 class TcnBluetoothManager(
-    private val ctx: Context,
+    private val context: Context,
     private val scanner: BluetoothLeScanner,
     private val advertiser: BluetoothLeAdvertiser,
     private val tcnCallback: TcnBluetoothServiceCallback
@@ -60,7 +60,7 @@ class TcnBluetoothManager(
         startAdvertising()
         // Create the local GATTServer and open it once.
         initBleGattServer(
-            (ctx.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager),
+            (context.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager),
             TcnConstants.UUID_SERVICE
         )
 
@@ -167,7 +167,7 @@ class TcnBluetoothManager(
                 setCallbackType(ScanSettings.CALLBACK_TYPE_ALL_MATCHES)
                 setMatchMode(ScanSettings.MATCH_MODE_AGGRESSIVE)
                 setNumOfMatches(ScanSettings.MATCH_NUM_MAX_ADVERTISEMENT)
-                setReportDelay(TimeUnit.SECONDS.toMillis(1))
+                setReportDelay(TimeUnit.SECONDS.toMillis(10))
             }.build()
 
             scanner.startScan(null, scanSettings, scanCallback)
@@ -272,7 +272,7 @@ class TcnBluetoothManager(
         bluetoothManager: BluetoothManager,
         serviceUUID: UUID?
     ) {
-        bluetoothGattServer = bluetoothManager.openGattServer(ctx,
+        bluetoothGattServer = bluetoothManager.openGattServer(context,
             object : BluetoothGattServerCallback() {
                 override fun onCharacteristicWriteRequest(
                     device: BluetoothDevice?,
