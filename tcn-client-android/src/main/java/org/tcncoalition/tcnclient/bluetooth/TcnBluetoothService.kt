@@ -9,18 +9,8 @@ import androidx.lifecycle.LifecycleService
 
 class TcnBluetoothService : LifecycleService() {
 
-    inner class LocalBinder : Binder() {
-        val service = this@TcnBluetoothService
-    }
-
-    companion object {
-        const val NOTIFICATION_ID = 0
-    }
-
-    private var tcnBluetoothManager: TcnBluetoothManager? = null
+    private lateinit var tcnBluetoothManager: TcnBluetoothManager
     private val binder: IBinder = LocalBinder()
-    private lateinit var tcnCallback: TcnBluetoothServiceCallback
-
     private var isStarted = false
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -29,7 +19,7 @@ class TcnBluetoothService : LifecycleService() {
     }
 
     override fun onDestroy() {
-        tcnBluetoothManager?.stop()
+        tcnBluetoothManager.stop()
         super.onDestroy()
     }
 
@@ -38,20 +28,17 @@ class TcnBluetoothService : LifecycleService() {
         return binder
     }
 
-    private fun BluetoothAdapter.supportsAdvertising() =
-        isMultipleAdvertisementSupported && bluetoothLeAdvertiser != null
-
     fun setForegroundNotification(notification: Notification) {
         startForeground(NOTIFICATION_ID, notification)
     }
 
-    fun setTcnCallback(tcnCallback: TcnBluetoothServiceCallback) {
-        this.tcnCallback = tcnCallback
-    }
+    private fun BluetoothAdapter.supportsAdvertising() =
+        isMultipleAdvertisementSupported && bluetoothLeAdvertiser != null
 
-    fun startTcnBluetoothService() {
+    fun startTcnExchange(tcnCallback: TcnBluetoothServiceCallback) {
         val bluetoothAdapter = BluetoothAdapter.getDefaultAdapter()
-        bluetoothAdapter.supportsAdvertising()
+        bluetoothAdapter.isEnabled
+        if (!bluetoothAdapter.supportsAdvertising()) return
 
         val scanner = bluetoothAdapter.bluetoothLeScanner ?: return
         val advertiser = bluetoothAdapter.bluetoothLeAdvertiser ?: return
@@ -66,14 +53,21 @@ class TcnBluetoothService : LifecycleService() {
             tcnCallback
         )
 
-        tcnBluetoothManager?.start()
+        tcnBluetoothManager.start()
     }
 
-    fun stopTcnBluetoothService() {
+    fun stopTcnExchange() {
         if (!isStarted) return
         isStarted = false
 
-        tcnBluetoothManager?.stop()
+        tcnBluetoothManager.stop()
     }
 
+    inner class LocalBinder : Binder() {
+        val service = this@TcnBluetoothService
+    }
+
+    companion object {
+        const val NOTIFICATION_ID = 42
+    }
 }

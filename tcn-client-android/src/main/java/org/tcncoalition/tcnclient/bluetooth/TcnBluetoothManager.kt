@@ -1,18 +1,30 @@
 package org.tcncoalition.tcnclient.bluetooth
 
-import android.bluetooth.*
-import android.bluetooth.le.*
+import android.bluetooth.BluetoothDevice
+import android.bluetooth.BluetoothGatt
+import android.bluetooth.BluetoothGattCharacteristic
+import android.bluetooth.BluetoothGattServer
+import android.bluetooth.BluetoothGattServerCallback
+import android.bluetooth.BluetoothGattService
+import android.bluetooth.BluetoothManager
+import android.bluetooth.le.AdvertiseCallback
+import android.bluetooth.le.AdvertiseData
+import android.bluetooth.le.AdvertiseSettings
+import android.bluetooth.le.BluetoothLeAdvertiser
+import android.bluetooth.le.BluetoothLeScanner
+import android.bluetooth.le.ScanCallback
+import android.bluetooth.le.ScanResult
+import android.bluetooth.le.ScanSettings
 import android.content.Context
-import android.os.Build
 import android.os.Handler
 import android.os.ParcelUuid
 import android.util.Base64
 import android.util.Log
-import androidx.annotation.RequiresApi
 import org.tcncoalition.tcnclient.TcnConstants
-import java.util.*
+import java.util.Timer
+import java.util.TimerTask
+import java.util.UUID
 import java.util.concurrent.TimeUnit
-import kotlin.collections.ArrayList
 
 class TcnBluetoothManager(
     private val ctx: Context,
@@ -20,10 +32,6 @@ class TcnBluetoothManager(
     private val advertiser: BluetoothLeAdvertiser,
     private val tcnCallback: TcnBluetoothServiceCallback
 ) {
-
-    companion object {
-        private const val TAG = "TcnBluetoothService"
-    }
 
     var bluetoothGattServer: BluetoothGattServer? = null
 
@@ -127,13 +135,13 @@ class TcnBluetoothManager(
     }
 
     private fun dequeueFromAdvertising(tcn: ByteArray?) {
-        val tcn = tcn ?: return
+        tcn ?: return
         tcnAdvertisingQueue.remove(tcn)
         Log.i(TAG, "Dequeued TCN=${Base64.encodeToString(tcn, Base64.DEFAULT)} from advertising")
     }
 
     private fun enqueueForAdvertising(tcn: ByteArray?, atHead: Boolean = false) {
-        val tcn = tcn ?: return
+        tcn ?: return
         if (atHead) {
             tcnAdvertisingQueue.add(0, tcn)
         } else {
@@ -142,7 +150,6 @@ class TcnBluetoothManager(
         Log.i(TAG, "Enqueued TCN=${Base64.encodeToString(tcn, Base64.DEFAULT)} for advertising")
     }
 
-    @RequiresApi(Build.VERSION_CODES.LOLLIPOP)
     private fun startScan() {
         // Use try catch to handle DeadObject exception
         try {
@@ -157,13 +164,10 @@ class TcnBluetoothManager(
                 // Low latency is important for older Android devices to be able to discover nearby
                 // devices.
                 setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY)
-                setReportDelay(TimeUnit.SECONDS.toMillis(10))
-                @RequiresApi
-                if (Build.VERSION_CODES.M == Build.VERSION.SDK_INT) {
-                    setCallbackType(ScanSettings.CALLBACK_TYPE_ALL_MATCHES)
-                    setMatchMode(ScanSettings.MATCH_MODE_AGGRESSIVE)
-                    setNumOfMatches(ScanSettings.MATCH_NUM_MAX_ADVERTISEMENT)
-                }
+                setCallbackType(ScanSettings.CALLBACK_TYPE_ALL_MATCHES)
+                setMatchMode(ScanSettings.MATCH_MODE_AGGRESSIVE)
+                setNumOfMatches(ScanSettings.MATCH_NUM_MAX_ADVERTISEMENT)
+                setReportDelay(TimeUnit.SECONDS.toMillis(1))
             }.build()
 
             scanner.startScan(null, scanSettings, scanCallback)
@@ -203,9 +207,9 @@ class TcnBluetoothManager(
 
         override fun onBatchScanResults(results: MutableList<ScanResult>?) {
             super.onBatchScanResults(results)
-            Log.d(TAG, "onBatchScanResults")
 
-            val results = results ?: listOf<ScanResult>()
+            results ?: return
+            Log.d(TAG, "onBatchScanResults: ${results.size}")
 
             // Remove TCNs from our advertising queue that we received from devices which are now
             // out of range.
@@ -228,9 +232,10 @@ class TcnBluetoothManager(
 
                 val scanRecord = it.scanRecord ?: return@for_each
                 val tcnServiceData = scanRecord.serviceData[
-                        ParcelUuid(TcnConstants.UUID_SERVICE)] ?: return@for_each
+                    ParcelUuid(TcnConstants.UUID_SERVICE)] ?: return@for_each
                 if (tcnServiceData.size < TcnConstants.TEMPORARY_CONTACT_NUMBER_LENGTH) return
-                val tcn = tcnServiceData.sliceArray(0 until TcnConstants.TEMPORARY_CONTACT_NUMBER_LENGTH)
+                val tcn =
+                    tcnServiceData.sliceArray(0 until TcnConstants.TEMPORARY_CONTACT_NUMBER_LENGTH)
 
                 Log.d(TAG, "Did find TCN=${Base64.encodeToString(tcn, Base64.DEFAULT)}")
                 tcnCallback.onTcnFound(tcn)
@@ -365,5 +370,9 @@ class TcnBluetoothManager(
         } catch (exception: Exception) {
             Log.e(TAG, "Stop advertising failed: $exception")
         }
+    }
+
+    companion object {
+        private const val TAG = "TcnBluetoothService"
     }
 }
