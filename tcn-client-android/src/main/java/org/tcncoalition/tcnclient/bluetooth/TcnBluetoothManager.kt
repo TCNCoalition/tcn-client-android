@@ -45,6 +45,9 @@ class TcnBluetoothManager(
 
     private var inRangeBleAddressToTcnMap: MutableMap<String, ByteArray> = mutableMapOf()
 
+    private var estimatedDistanceToRemoteDeviceAddressMap: MutableMap<String, Double> =
+        mutableMapOf()
+
     private var generateOwnTcnTimer: Timer? = null
 
     private var advertiseNextTcnTimer: Timer? = null
@@ -60,10 +63,8 @@ class TcnBluetoothManager(
             TcnConstants.UUID_SERVICE
         )
 
-        // This starts advertising
-        changeOwnTcn()
+        changeOwnTcn() // This starts advertising also
         runChangeOwnTcnTimer()
-
         runAdvertiseNextTcnTimer()
     }
 
@@ -84,6 +85,7 @@ class TcnBluetoothManager(
 
         tcnAdvertisingQueue.clear()
         inRangeBleAddressToTcnMap.clear()
+        estimatedDistanceToRemoteDeviceAddressMap.clear()
     }
 
     private fun runChangeOwnTcnTimer() {
@@ -121,11 +123,11 @@ class TcnBluetoothManager(
         )
     }
 
-    fun changeOwnTcn() {
+    private fun changeOwnTcn() {
         // Remove current TCN from the advertising queue.
         dequeueFromAdvertising(generatedTcn)
         val tcn = tcnCallback.generateTcn()
-        Log.i(TAG, "Did generate TCN=${Base64.encodeToString(tcn, Base64.DEFAULT)}")
+        Log.i(TAG, "Did generate TCN=${Base64.encodeToString(tcn, Base64.NO_WRAP)}")
         generatedTcn = tcn
         // Enqueue new TCN to the head of the advertising queue so it will be advertised next.
         enqueueForAdvertising(tcn, true)
@@ -137,7 +139,7 @@ class TcnBluetoothManager(
     private fun dequeueFromAdvertising(tcn: ByteArray?) {
         tcn ?: return
         tcnAdvertisingQueue.remove(tcn)
-        Log.i(TAG, "Dequeued TCN=${Base64.encodeToString(tcn, Base64.DEFAULT)} from advertising")
+        Log.i(TAG, "Dequeued TCN=${Base64.encodeToString(tcn, Base64.NO_WRAP)} from advertising")
     }
 
     private fun enqueueForAdvertising(tcn: ByteArray?, atHead: Boolean = false) {
@@ -147,7 +149,7 @@ class TcnBluetoothManager(
         } else {
             tcnAdvertisingQueue.add(tcn)
         }
-        Log.i(TAG, "Enqueued TCN=${Base64.encodeToString(tcn, Base64.DEFAULT)} for advertising")
+        Log.i(TAG, "Enqueued TCN=${Base64.encodeToString(tcn, Base64.NO_WRAP)} for advertising")
     }
 
     private fun startScan() {
@@ -156,6 +158,8 @@ class TcnBluetoothManager(
             // Do not use scan filters because we wan't to keep track of every device in range
             // that writes our characteristic, and not just the ones that are advertising the TCN service.
             // (Android bridging case)
+            // iOS in the background advertises differently and Android can not discover it,
+            // if it scans using filters for a specific service.
 //            val scanFilters = arrayOf(TcnConstants.UUID_SERVICE).map {
 //                ScanFilter.Builder().setServiceUuid(ParcelUuid(it)).build()
 //            }
@@ -167,7 +171,10 @@ class TcnBluetoothManager(
                 setCallbackType(ScanSettings.CALLBACK_TYPE_ALL_MATCHES)
                 setMatchMode(ScanSettings.MATCH_MODE_AGGRESSIVE)
                 setNumOfMatches(ScanSettings.MATCH_NUM_MAX_ADVERTISEMENT)
-                setReportDelay(TimeUnit.SECONDS.toMillis(10))
+                // Report delay plays an important role in keeping track of the devices nearby:
+                // If a 30 sec batch scan result doesn't include devices from the previous result,
+                // then we assume those out of range.
+                setReportDelay(TimeUnit.SECONDS.toMillis(30))
             }.build()
 
             scanner.startScan(null, scanSettings, scanCallback)
@@ -185,7 +192,7 @@ class TcnBluetoothManager(
                 stopScan()
                 startScan()
             }
-        }, TimeUnit.SECONDS.toMillis(30))
+        }, TimeUnit.SECONDS.toMillis(90)) // This should be at least 2x of the scan settings report delay
     }
 
     private fun stopScan() {
@@ -208,12 +215,48 @@ class TcnBluetoothManager(
         override fun onBatchScanResults(results: MutableList<ScanResult>?) {
             super.onBatchScanResults(results)
 
-            results ?: return
-            Log.d(TAG, "onBatchScanResults: ${results.size}")
+            Log.d(TAG, "onBatchScanResults: ${results?.size}")
+
+            // Search for a TCN in the service data of the advertisement
+            results?.forEach for_each@{
+                Log.d(TAG, "result=$it")
+
+                val scanRecord = it.scanRecord ?: return@for_each
+
+                val tcnServiceData = scanRecord.serviceData[
+                        ParcelUuid(TcnConstants.UUID_SERVICE)]
+
+                val hintIsAndroid = (tcnServiceData != null)
+
+                // Update estimated distance
+                val estimatedDistanceMeters = getEstimatedDistanceMeters(
+                    it.rssi,
+                    getMeasuredRSSIAtOneMeter(scanRecord.txPowerLevel, hintIsAndroid)
+                )
+                estimatedDistanceToRemoteDeviceAddressMap[it.device.address] =
+                    estimatedDistanceMeters
+
+                tcnServiceData ?: return@for_each
+                if (tcnServiceData.size < TcnConstants.TEMPORARY_CONTACT_NUMBER_LENGTH) return@for_each
+                val tcn =
+                    tcnServiceData.sliceArray(0 until TcnConstants.TEMPORARY_CONTACT_NUMBER_LENGTH)
+
+                Log.i(
+                    TAG,
+                    "Did find TCN=${Base64.encodeToString(
+                        tcn,
+                        Base64.NO_WRAP
+                    )} from device=${it.device.address}\""
+                )
+                tcnCallback.onTcnFound(tcn, estimatedDistanceToRemoteDeviceAddressMap[it.device.address])
+            }
 
             // Remove TCNs from our advertising queue that we received from devices which are now
             // out of range.
-            val currentInRangeAddresses = results.map { it.device.address }
+            var currentInRangeAddresses = results?.mapNotNull { it.device.address }
+            if (currentInRangeAddresses == null) {
+                currentInRangeAddresses = arrayListOf()
+            }
             val addressesToRemove: MutableList<String> = mutableListOf()
             inRangeBleAddressToTcnMap.keys.forEach {
                 if (!currentInRangeAddresses.contains(it)) {
@@ -226,19 +269,17 @@ class TcnBluetoothManager(
                 inRangeBleAddressToTcnMap.remove(it)
             }
 
-            // Search for a TCN in the service data of the advertisement
-            results.forEach for_each@{
-                Log.d(TAG, "result=$it")
-
-                val scanRecord = it.scanRecord ?: return@for_each
-                val tcnServiceData = scanRecord.serviceData[
-                    ParcelUuid(TcnConstants.UUID_SERVICE)] ?: return@for_each
-                if (tcnServiceData.size < TcnConstants.TEMPORARY_CONTACT_NUMBER_LENGTH) return
-                val tcn =
-                    tcnServiceData.sliceArray(0 until TcnConstants.TEMPORARY_CONTACT_NUMBER_LENGTH)
-
-                Log.d(TAG, "Did find TCN=${Base64.encodeToString(tcn, Base64.DEFAULT)}")
-                tcnCallback.onTcnFound(tcn)
+            // Notify the API user that TCNs which are left in the list are still in range and
+            // we have just found them again so it can track the duration of the contact.
+            inRangeBleAddressToTcnMap.forEach {
+                Log.i(
+                    TAG,
+                    "Did find TCN=${Base64.encodeToString(
+                        it.value,
+                        Base64.NO_WRAP
+                    )} from device=${it.key}"
+                )
+                tcnCallback.onTcnFound(it.value, estimatedDistanceToRemoteDeviceAddressMap[it.key])
             }
         }
     }
@@ -247,7 +288,7 @@ class TcnBluetoothManager(
         // Use try catch to handle DeadObject exception
         try {
             val settings = AdvertiseSettings.Builder()
-                .setAdvertiseMode(AdvertiseSettings.ADVERTISE_MODE_LOW_POWER)
+                .setAdvertiseMode(AdvertiseSettings.ADVERTISE_MODE_LOW_LATENCY)
                 .setTxPowerLevel(AdvertiseSettings.ADVERTISE_TX_POWER_MEDIUM)
                 .setConnectable(true)
                 .build()
@@ -257,6 +298,10 @@ class TcnBluetoothManager(
                 .addServiceUuid(ParcelUuid(TcnConstants.UUID_SERVICE))
                 .addServiceData(
                     ParcelUuid(TcnConstants.UUID_SERVICE),
+                    // Attach the first 4 bytes of our TCN to work around the problem of iOS
+                    // devices writing a new TCN to us whenever we rotate the TCN (every 10 sec).
+                    // iOS devices use the last 4 bytes to identify the Android devices and write
+                    // only once a TCN to them.
                     tcnAdvertisingQueue.first() + generatedTcn.sliceArray(0..3)
                 )
                 .build()
@@ -296,17 +341,17 @@ class TcnBluetoothManager(
                                 return
                             }
 
-                            Log.d(
+                            Log.i(
                                 TAG,
                                 "Did find TCN=${Base64.encodeToString(
                                     value,
-                                    Base64.DEFAULT
+                                    Base64.NO_WRAP
                                 )} from device=${device?.address}"
                             )
-                            tcnCallback.onTcnFound(value)
+                            tcnCallback.onTcnFound(value, estimatedDistanceToRemoteDeviceAddressMap[device?.address])
                             // TCNs received through characteristic writes come from iOS apps in the
                             // background.
-                            // Act as a bridge and advertise these TCNs so iOS apps can discover
+                            // We act as a bridge and advertise these TCNs so iOS apps can discover
                             // each other while in the background.
                             if (device != null && inRangeBleAddressToTcnMap[device.address] == null) {
                                 inRangeBleAddressToTcnMap[device.address] = value
