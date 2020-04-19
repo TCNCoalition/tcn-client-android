@@ -108,14 +108,12 @@ class TcnBluetoothManager(
         advertiseNextTcnTimer?.scheduleAtFixedRate(
             object : TimerTask() {
                 override fun run() {
-                    // No need to update advertised TCN if there aren't more than 1 enqueued.
-                    if (tcnAdvertisingQueue.size > 1) {
-                        val firstTCN = tcnAdvertisingQueue.first()
-                        tcnAdvertisingQueue.removeAt(0)
-                        tcnAdvertisingQueue.add(firstTCN)
-                        stopAdvertising()
-                        startAdvertising()
-                    }
+                    if (tcnAdvertisingQueue.isEmpty()) return
+                    val firstTCN = tcnAdvertisingQueue.first()
+                    tcnAdvertisingQueue.removeAt(0)
+                    tcnAdvertisingQueue.add(firstTCN)
+                    stopAdvertising()
+                    startAdvertising()
                 }
             },
             TimeUnit.SECONDS.toMillis(20),
@@ -124,6 +122,7 @@ class TcnBluetoothManager(
     }
 
     private fun changeOwnTcn() {
+        Log.i(TAG, "Changing own TCN ...")
         // Remove current TCN from the advertising queue.
         dequeueFromAdvertising(generatedTcn)
         val tcn = tcnCallback.generateTcn()
@@ -172,9 +171,9 @@ class TcnBluetoothManager(
                 setMatchMode(ScanSettings.MATCH_MODE_AGGRESSIVE)
                 setNumOfMatches(ScanSettings.MATCH_NUM_MAX_ADVERTISEMENT)
                 // Report delay plays an important role in keeping track of the devices nearby:
-                // If a 30 sec batch scan result doesn't include devices from the previous result,
-                // then we assume those out of range.
-                setReportDelay(TimeUnit.SECONDS.toMillis(30))
+                // If a 60 sec batch scan result doesn't include devices from the previous result,
+                // then we consider those devices are out of range.
+                setReportDelay(TimeUnit.SECONDS.toMillis(60))
             }.build()
 
             scanner.startScan(null, scanSettings, scanCallback)
@@ -186,13 +185,16 @@ class TcnBluetoothManager(
         // Bug workaround: Restart periodically so the Bluetooth daemon won't get into a broken
         // state on old Android devices.
         handler.removeCallbacksAndMessages(null)
-        handler.postDelayed({
-            if (isStarted) {
-                Log.i(TAG, "Restarting scan...")
-                stopScan()
-                startScan()
-            }
-        }, TimeUnit.SECONDS.toMillis(90)) // This should be at least 2x of the scan settings report delay
+        handler.postDelayed(
+            {
+                if (isStarted) {
+                    Log.i(TAG, "Restarting scan...")
+                    stopScan()
+                    startScan()
+                }
+            },
+            TimeUnit.SECONDS.toMillis(90)
+        ) // This should be at least 2x of the scan settings report delay
     }
 
     private fun stopScan() {
@@ -246,9 +248,12 @@ class TcnBluetoothManager(
                     "Did find TCN=${Base64.encodeToString(
                         tcn,
                         Base64.NO_WRAP
-                    )} from device=${it.device.address}\""
+                    )} from device=${it.device.address}\" at estimated distance=${estimatedDistanceToRemoteDeviceAddressMap[it.device.address]}"
                 )
-                tcnCallback.onTcnFound(tcn, estimatedDistanceToRemoteDeviceAddressMap[it.device.address])
+                tcnCallback.onTcnFound(
+                    tcn,
+                    estimatedDistanceToRemoteDeviceAddressMap[it.device.address]
+                )
             }
 
             // Remove TCNs from our advertising queue that we received from devices which are now
@@ -277,7 +282,7 @@ class TcnBluetoothManager(
                     "Did find TCN=${Base64.encodeToString(
                         it.value,
                         Base64.NO_WRAP
-                    )} from device=${it.key}"
+                    )} from device=${it.key} at estimated distance=${estimatedDistanceToRemoteDeviceAddressMap[it.key]}"
                 )
                 tcnCallback.onTcnFound(it.value, estimatedDistanceToRemoteDeviceAddressMap[it.key])
             }
@@ -299,7 +304,7 @@ class TcnBluetoothManager(
                 .addServiceData(
                     ParcelUuid(TcnConstants.UUID_SERVICE),
                     // Attach the first 4 bytes of our TCN to work around the problem of iOS
-                    // devices writing a new TCN to us whenever we rotate the TCN (every 10 sec).
+                    // devices writing a new TCN to us whenever we rotate the TCN (every 20 sec).
                     // iOS devices use the last 4 bytes to identify the Android devices and write
                     // only once a TCN to them.
                     tcnAdvertisingQueue.first() + generatedTcn.sliceArray(0..3)
@@ -307,7 +312,12 @@ class TcnBluetoothManager(
                 .build()
 
             advertiser.startAdvertising(settings, data, advertisingCallback)
-            Log.i(TAG, "Started advertising")
+            Log.i(
+                TAG, "Started advertising TCN=${Base64.encodeToString(
+                    tcnAdvertisingQueue.first(),
+                    Base64.NO_WRAP
+                )} isOwn=${tcnAdvertisingQueue.first().contentEquals(generatedTcn)}"
+            )
         } catch (exception: Exception) {
             Log.e(TAG, "Start advertising failed: $exception")
         }
@@ -346,14 +356,17 @@ class TcnBluetoothManager(
                                 "Did find TCN=${Base64.encodeToString(
                                     value,
                                     Base64.NO_WRAP
-                                )} from device=${device?.address}"
+                                )} from device=${device?.address} at estimated distance=${estimatedDistanceToRemoteDeviceAddressMap[device?.address]}"
                             )
-                            tcnCallback.onTcnFound(value, estimatedDistanceToRemoteDeviceAddressMap[device?.address])
+                            tcnCallback.onTcnFound(
+                                value,
+                                estimatedDistanceToRemoteDeviceAddressMap[device?.address]
+                            )
                             // TCNs received through characteristic writes come from iOS apps in the
                             // background.
                             // We act as a bridge and advertise these TCNs so iOS apps can discover
                             // each other while in the background.
-                            if (device != null && inRangeBleAddressToTcnMap[device.address] == null) {
+                            if (device != null) {
                                 inRangeBleAddressToTcnMap[device.address] = value
                                 enqueueForAdvertising(value)
                             }
