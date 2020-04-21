@@ -5,6 +5,7 @@ import android.bluetooth.BluetoothAdapter
 import android.content.Intent
 import android.content.IntentFilter
 import android.os.Binder
+import android.os.Build
 import android.os.IBinder
 import androidx.lifecycle.LifecycleService
 
@@ -30,8 +31,10 @@ class TcnBluetoothService : LifecycleService() {
         return binder
     }
 
-    fun setForegroundNotification(id: Int, notification: Notification) {
-        startForeground(id, notification)
+    fun startForegroundNotificationIfNeeded(id: Int, notification: Notification) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            startForeground(id, notification)
+        }
     }
 
     private fun BluetoothAdapter.supportsAdvertising() =
