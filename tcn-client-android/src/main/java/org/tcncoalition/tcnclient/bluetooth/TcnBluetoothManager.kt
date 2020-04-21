@@ -9,6 +9,8 @@ import android.bluetooth.BluetoothGattService
 import android.bluetooth.BluetoothManager
 import android.bluetooth.le.*
 import android.content.Context
+import android.os.Build
+import android.os.Handler
 import android.os.ParcelUuid
 import android.util.Base64
 import android.util.Log
@@ -37,6 +39,8 @@ class TcnBluetoothManager(
 
     private var estimatedDistanceToRemoteDeviceAddressMap: MutableMap<String, Double> =
         mutableMapOf()
+
+    private var handler = Handler()
 
     private var generateOwnTcnTimer: Timer? = null
 
@@ -68,6 +72,7 @@ class TcnBluetoothManager(
         bluetoothGattServer?.close()
         bluetoothGattServer = null
 
+        handler.removeCallbacksAndMessages(null)
         generateOwnTcnTimer?.cancel()
         generateOwnTcnTimer = null
         advertiseNextTcnTimer?.cancel()
@@ -146,9 +151,9 @@ class TcnBluetoothManager(
         // Use try catch to handle DeadObject exception
         try {
             // Scan filters are required for continuous background scanning.
-            val scanFilters = arrayOf(TcnConstants.UUID_SERVICE).map {
-                ScanFilter.Builder().setServiceUuid(ParcelUuid(it)).build()
-            }
+//            val scanFilters = arrayOf(TcnConstants.UUID_SERVICE).map {
+//                ScanFilter.Builder().setServiceUuid(ParcelUuid(it)).build()
+//            }
 
             val scanSettings = ScanSettings.Builder().apply {
                 // Low latency is important for older Android devices to be able to discover nearby
@@ -160,15 +165,35 @@ class TcnBluetoothManager(
                 // Report delay plays an important role in keeping track of the devices nearby:
                 // If a batch scan result doesn't include devices from the previous result,
                 // then we consider those devices are out of range.
-                setReportDelay(TimeUnit.MINUTES.toMillis(1))
+                // Important: Using a large duration value won't get scan results on old OSes
+                setReportDelay(TimeUnit.SECONDS.toMillis(5))
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    setPhy(ScanSettings.PHY_LE_ALL_SUPPORTED)
+                    setLegacy(true)
+                }
             }.build()
 
-            scanner.startScan(scanFilters, scanSettings, scanCallback)
+//            scanner.startScan(scanFilters, scanSettings, scanCallback)
+            scanner.startScan(null, scanSettings, scanCallback)
             Log.i(TAG, "Started scan")
         } catch (exception: Exception) {
             Log.e(TAG, "Start scan failed: $exception")
             startScan()
         }
+
+        // Bug workaround: Restart periodically so the Bluetooth daemon won't get into a broken
+        // state on old Android devices.
+        handler.removeCallbacksAndMessages(null)
+        handler.postDelayed({
+            if (isStarted) {
+                Log.i(TAG, "Restarting scan...")
+                // If there are outstanding scan results then flush them so we can process them now
+                // in onBatchScanResults
+                scanner.flushPendingScanResults(scanCallback)
+                stopScan()
+                startScan()
+            }
+        }, TimeUnit.SECONDS.toMillis(20))
     }
 
     private fun stopScan() {
