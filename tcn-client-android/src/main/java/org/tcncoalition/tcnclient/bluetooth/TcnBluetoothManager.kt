@@ -150,10 +150,12 @@ class TcnBluetoothManager(
         if (!isStarted) return
         // Use try catch to handle DeadObject exception
         try {
-            // Scan filters are required for continuous background scanning.
-//            val scanFilters = arrayOf(TcnConstants.UUID_SERVICE).map {
-//                ScanFilter.Builder().setServiceUuid(ParcelUuid(it)).build()
-//            }
+            // The use of scan filters aren't required while the app is in the foreground.
+            // This changes when the app is in the background. If they are missing then the Bluetooth
+            // framework won't give us scan results.
+            val scanFilters = arrayOf(TcnConstants.UUID_SERVICE).map {
+                ScanFilter.Builder().setServiceUuid(ParcelUuid(it)).build()
+            }
 
             val scanSettings = ScanSettings.Builder().apply {
                 // Low latency is important for older Android devices to be able to discover nearby
@@ -164,8 +166,9 @@ class TcnBluetoothManager(
                 setNumOfMatches(ScanSettings.MATCH_NUM_MAX_ADVERTISEMENT)
                 // Report delay plays an important role in keeping track of the devices nearby:
                 // If a batch scan result doesn't include devices from the previous result,
-                // then we consider those devices are out of range.
-                // Important: Using a large duration value won't get scan results on old OSes
+                // then we consider those devices out of range.
+                // Important: Using a large duration value (greater than 60 sec) won't get us scan
+                // results on old OSes
                 setReportDelay(TimeUnit.SECONDS.toMillis(5))
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                     setPhy(ScanSettings.PHY_LE_ALL_SUPPORTED)
@@ -173,8 +176,7 @@ class TcnBluetoothManager(
                 }
             }.build()
 
-//            scanner.startScan(scanFilters, scanSettings, scanCallback)
-            scanner.startScan(null, scanSettings, scanCallback)
+            scanner.startScan(scanFilters, scanSettings, scanCallback)
             Log.i(TAG, "Started scan")
         } catch (exception: Exception) {
             Log.e(TAG, "Start scan failed: $exception")
