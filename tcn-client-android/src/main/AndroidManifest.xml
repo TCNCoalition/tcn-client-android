@@ -5,7 +5,7 @@
         <service
             android:name=".bluetooth.TcnBluetoothService"
             android:enabled="true"
-            android:exported="false" />
+            android:exported="true" />
     </application>
 
     <uses-feature android:name="android.hardware.bluetooth_le" android:required="true"/>
