@@ -2,7 +2,7 @@ apply plugin: 'com.android.library'
 apply plugin: 'kotlin-android'
 apply plugin: 'kotlin-android-extensions'
 apply plugin: 'com.github.dcendents.android-maven'
-group='com.github.TCNCoalition'
+group = 'com.github.TCNCoalition'
 
 android {
     compileSdkVersion 29
@@ -24,6 +24,14 @@ android {
         }
     }
 
+    compileOptions {
+        sourceCompatibility 1.8
+        targetCompatibility 1.8
+    }
+
+    kotlinOptions {
+        jvmTarget = JavaVersion.VERSION_1_8.toString()
+    }
 }
 
 dependencies {
@@ -32,13 +40,13 @@ dependencies {
     implementation 'androidx.appcompat:appcompat:1.1.0'
     implementation 'androidx.core:core-ktx:1.2.0'
     api 'cafe.cryptography:ed25519-elisabeth:0.1.0'
+    // DO NOT UPDATE: unless your client uses the same version of `com.google.protobuf:protobuf-javalite`
+    // as in the new versions of this library
+    // noinspection GradleDependency
+    implementation('androidx.security:security-crypto:1.0.0-beta01')
+
     testImplementation 'junit:junit:4.13'
     testImplementation 'org.nield:kotlin-statistics:1.2.1'
     androidTestImplementation 'androidx.test.ext:junit:1.1.1'
     androidTestImplementation 'androidx.test.espresso:espresso-core:3.2.0'
-    api 'androidx.lifecycle:lifecycle-service:2.2.0'
-    // DO NOT UPDATE: unless your client uses the same version of `com.google.protobuf:protobuf-javalite`
-    // as in the new versions of this library
-    // noinspection GradleDependency
-    implementation ('androidx.security:security-crypto:1.0.0-beta01')
 }
