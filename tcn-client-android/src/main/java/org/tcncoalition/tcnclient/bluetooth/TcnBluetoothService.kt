@@ -1,20 +1,28 @@
 package org.tcncoalition.tcnclient.bluetooth
 
 import android.app.Notification
+import android.app.Service
 import android.bluetooth.BluetoothAdapter
 import android.content.Intent
 import android.content.IntentFilter
 import android.os.Binder
 import android.os.Build
 import android.os.IBinder
-import androidx.lifecycle.LifecycleService
+import androidx.core.content.getSystemService
+import org.tcncoalition.tcnclient.WakeLockManager
 
-class TcnBluetoothService : LifecycleService() {
+class TcnBluetoothService : Service() {
 
     private var tcnBluetoothManager: TcnBluetoothManager? = null
     private var bluetoothStateListener: BluetoothStateListener? = null
     private val binder: IBinder = LocalBinder()
     private var isStarted = false
+    private lateinit var lockManager: WakeLockManager
+
+    override fun onCreate() {
+        super.onCreate()
+        lockManager = WakeLockManager(applicationContext.getSystemService())
+    }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         super.onStartCommand(intent, flags, startId)
@@ -26,10 +34,7 @@ class TcnBluetoothService : LifecycleService() {
         super.onDestroy()
     }
 
-    override fun onBind(intent: Intent): IBinder? {
-        super.onBind(intent)
-        return binder
-    }
+    override fun onBind(intent: Intent) = binder
 
     fun startForegroundNotificationIfNeeded(id: Int, notification: Notification) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -74,6 +79,7 @@ class TcnBluetoothService : LifecycleService() {
             },
             IntentFilter(BluetoothAdapter.ACTION_STATE_CHANGED)
         )
+        lockManager.acquire()
     }
 
     fun stopTcnExchange() {
@@ -81,6 +87,7 @@ class TcnBluetoothService : LifecycleService() {
         isStarted = false
 
         tcnBluetoothManager?.stop()
+        lockManager.release()
     }
 
     inner class LocalBinder : Binder() {
