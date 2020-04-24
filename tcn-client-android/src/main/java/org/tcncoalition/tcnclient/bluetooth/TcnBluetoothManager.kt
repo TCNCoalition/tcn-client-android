@@ -46,10 +46,9 @@ class TcnBluetoothManager(
     private var estimatedDistanceToRemoteDeviceAddressMap = mutableMapOf<String, Double>()
 
     private var handler = Handler()
-    private var generateOwnTcnTimer: Timer? = null
     private var advertiseNextTcnTimer: Timer? = null
 
-    private val executor: ExecutorService = Executors.newFixedThreadPool(2)
+    private var executor: ExecutorService? = null
 
     fun start() {
         if (isStarted) return
@@ -61,10 +60,8 @@ class TcnBluetoothManager(
             (context.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager),
             TcnConstants.UUID_SERVICE
         )
-        executor.execute {
+        executor = Executors.newFixedThreadPool(2)
             changeOwnTcn() // This starts advertising also
-        }
-        runChangeOwnTcnTimer()
         runAdvertiseNextTcnTimer()
     }
 
@@ -79,28 +76,15 @@ class TcnBluetoothManager(
         bluetoothGattServer = null
 
         handler.removeCallbacksAndMessages(null)
-        generateOwnTcnTimer?.cancel()
-        generateOwnTcnTimer = null
         advertiseNextTcnTimer?.cancel()
         advertiseNextTcnTimer = null
 
         tcnAdvertisingQueue.clear()
         inRangeBleAddressToTcnMap.clear()
         estimatedDistanceToRemoteDeviceAddressMap.clear()
-    }
 
-    private fun runChangeOwnTcnTimer() {
-        generateOwnTcnTimer?.cancel()
-        generateOwnTcnTimer = Timer()
-        generateOwnTcnTimer?.scheduleAtFixedRate(
-            object : TimerTask() {
-                override fun run() {
-                    changeOwnTcn()
-                }
-            },
-            TimeUnit.MINUTES.toMillis(TcnConstants.TEMPORARY_CONTACT_NUMBER_CHANGE_TIME_INTERVAL_MINUTES),
-            TimeUnit.MINUTES.toMillis(TcnConstants.TEMPORARY_CONTACT_NUMBER_CHANGE_TIME_INTERVAL_MINUTES)
-        )
+        executor?.shutdown()
+        executor = null
     }
 
     private fun runAdvertiseNextTcnTimer() {
@@ -122,18 +106,20 @@ class TcnBluetoothManager(
         )
     }
 
-    private fun changeOwnTcn() {
-        Log.i(TAG, "Changing own TCN ...")
-        // Remove current TCN from the advertising queue.
-        dequeueFromAdvertising(generatedTcn)
-        val tcn = tcnCallback.generateTcn()
-        Log.i(TAG, "Did generate TCN=${Base64.encodeToString(tcn, Base64.NO_WRAP)}")
-        generatedTcn = tcn
-        // Enqueue new TCN to the head of the advertising queue so it will be advertised next.
-        enqueueForAdvertising(tcn, true)
-        // Force restart advertising with new TCN
-        stopAdvertising()
-        startAdvertising()
+    fun changeOwnTcn() {
+        executor?.execute {
+            Log.i(TAG, "Changing own TCN ...")
+            // Remove current TCN from the advertising queue.
+            dequeueFromAdvertising(generatedTcn)
+            val tcn = tcnCallback.generateTcn()
+            Log.i(TAG, "Did generate TCN=${Base64.encodeToString(tcn, Base64.NO_WRAP)}")
+            generatedTcn = tcn
+            // Enqueue new TCN to the head of the advertising queue so it will be advertised next.
+            enqueueForAdvertising(tcn, true)
+            // Force restart advertising with new TCN
+            stopAdvertising()
+            startAdvertising()
+        }
     }
 
     private fun dequeueFromAdvertising(tcn: ByteArray?) {
