@@ -1,6 +1,6 @@
 package org.tcncoalition.tcnclient
 
-import java.util.*
+import java.util.UUID
 
 //  Created by Zsombor Szabo on 10/04/2020.
 
@@ -21,8 +21,8 @@ object TcnConstants {
     private const val UUID_CHARACTERISTIC_STRING = "D61F4F27-3D6B-4B04-9E46-C9D2EA617F62"
     val UUID_CHARACTERISTIC: UUID = UUID.fromString(UUID_CHARACTERISTIC_STRING)
 
-    /** The time interval in minutes how often the temporary contact number changes. */
-    const val TEMPORARY_CONTACT_NUMBER_CHANGE_TIME_INTERVAL_MINUTES: Long = 15
+    /** The time interval in minutes how often the temporary contact number changes.*/
+    const val TCN_CHANGE_PERIOD: Long = 15
 
     /** The byte-length of the temporary contact number. */
     const val TEMPORARY_CONTACT_NUMBER_LENGTH: Int = 16

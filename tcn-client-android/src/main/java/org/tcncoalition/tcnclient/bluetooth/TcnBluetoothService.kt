@@ -10,9 +10,7 @@ import android.content.IntentFilter
 import android.os.Binder
 import android.os.Build
 import android.os.IBinder
-import androidx.annotation.RequiresApi
-import androidx.core.content.getSystemService
-import org.tcncoalition.tcnclient.WakeLockManager
+import android.util.Log
 
 class TcnBluetoothService : Service() {
 
@@ -20,24 +18,8 @@ class TcnBluetoothService : Service() {
     private var bluetoothStateListener: BluetoothStateListener? = null
     private val binder: IBinder = LocalBinder()
     private var isStarted = false
-//    private lateinit var lockManager: WakeLockManager
-    private val changeOwnTcn = ChangeOwnTcn()
 
-//    override fun onCreate() {
-//        super.onCreate()
-//        lockManager = WakeLockManager(applicationContext.getSystemService())
-//    }
-
-    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        super.onStartCommand(intent, flags, startId)
-        when (intent?.action) {
-            ACTION_CHANGE_OWN_TCN -> {
-                tcnBluetoothManager?.changeOwnTcn()
-                changeOwnTcn.schedule(this, getSystemService(Context.ALARM_SERVICE) as AlarmManager)
-            }
-        }
-        return START_STICKY
-    }
+    private val changeOwnTcn = ChangeOwnTcnAlarm()
 
     override fun onDestroy() {
         tcnBluetoothManager?.stop()
@@ -57,6 +39,15 @@ class TcnBluetoothService : Service() {
 
     fun setBluetoothStateListener(bluetoothStateListener: BluetoothStateListener) {
         this.bluetoothStateListener = bluetoothStateListener
+    }
+
+    private val bluetoothStateReceiver = BluetoothStateReceiver() { bluetoothOn ->
+        if (bluetoothOn) {
+            tcnBluetoothManager?.start()
+        } else {
+            tcnBluetoothManager?.stop()
+        }
+        bluetoothStateListener?.bluetoothStateChanged(bluetoothOn)
     }
 
     fun startTcnExchange(tcnCallback: TcnBluetoothServiceCallback) {
@@ -81,44 +72,26 @@ class TcnBluetoothService : Service() {
         tcnBluetoothManager?.start()
 
         registerReceiver(
-            BluetoothStateReceiver() { bluetoothOn ->
-                if (bluetoothOn) {
-                    tcnBluetoothManager?.start()
-                } else {
-                    tcnBluetoothManager?.stop()
-                }
-                bluetoothStateListener?.bluetoothStateChanged(bluetoothOn)
-            },
+            bluetoothStateReceiver,
             IntentFilter(BluetoothAdapter.ACTION_STATE_CHANGED)
         )
-//        lockManager.acquire()
+    }
+
+    fun changeOwnTcn() {
+        tcnBluetoothManager?.changeOwnTcn()
+        changeOwnTcn.schedule(this, getSystemService(Context.ALARM_SERVICE) as AlarmManager)
     }
 
     fun stopTcnExchange() {
         if (!isStarted) return
+        Log.i(TcnBluetoothService::javaClass.name, "stopTcnExchange")
         isStarted = false
-
+        unregisterReceiver(bluetoothStateReceiver)
         tcnBluetoothManager?.stop()
-//        lockManager.release()
         changeOwnTcn.cancel()
     }
 
     inner class LocalBinder : Binder() {
         val service = this@TcnBluetoothService
-    }
-
-    companion object {
-        const val ACTION_CHANGE_OWN_TCN = "change_own_tcn"
-
-        fun changeOwnTcn(context: Context) {
-            val intent = Intent(context, TcnBluetoothService::class.java).apply {
-                action = ACTION_CHANGE_OWN_TCN
-            }
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                context.startForegroundService(intent)
-            } else {
-                context.startService(intent)
-            }
-        }
     }
 }

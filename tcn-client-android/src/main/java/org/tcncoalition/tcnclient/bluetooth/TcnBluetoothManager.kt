@@ -61,7 +61,7 @@ class TcnBluetoothManager(
             TcnConstants.UUID_SERVICE
         )
         executor = Executors.newFixedThreadPool(2)
-            changeOwnTcn() // This starts advertising also
+        changeOwnTcn() // This starts advertising also
         runAdvertiseNextTcnTimer()
     }
 
