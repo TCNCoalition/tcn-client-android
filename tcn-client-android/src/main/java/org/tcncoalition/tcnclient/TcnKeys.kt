@@ -46,15 +46,15 @@ class TcnKeys(private val context: Context) {
         return tcn
     }
 
-    fun createReport(): SignedReport {
-        val endIndex = tck.index.short.toShort()
+    fun createReport(report: ByteArray, memoType: MemoType): SignedReport {
+        val endIndex = tck.index.short
         val minutesIn14Days = TimeUnit.DAYS.toMinutes(14)
         val periods = minutesIn14Days / 15
         val startIndex = max(0, endIndex - periods).toShort()
 
         return rak.createReport(
-            MemoType.CovidWatchV1,
-            "Hello, World!".toByteArray(),
+            memoType,
+            report,
             startIndex.toUShort(),
             endIndex.toUShort()
         )
