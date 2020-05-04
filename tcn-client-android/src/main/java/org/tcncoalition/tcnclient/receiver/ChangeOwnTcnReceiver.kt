@@ -4,11 +4,22 @@ import android.app.PendingIntent
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.os.PowerManager
 import org.tcncoalition.tcnclient.TcnClient
+import org.tcncoalition.tcnclient.TcnConstants.WAKELOCK_DURATION
+import org.tcncoalition.tcnclient.TcnConstants.WAKELOCK_TAG
 
 class ChangeOwnTcnReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context?, intent: Intent?) {
-        TcnClient.tcnManager?.changeOwnTcn()
+        context?.let {
+            val pm = it.getSystemService(Context.POWER_SERVICE) as PowerManager
+            val wl = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, WAKELOCK_TAG)
+            wl.acquire(WAKELOCK_DURATION.toLong())
+
+            TcnClient.tcnManager?.changeOwnTcn()
+
+            wl.release()
+        }
     }
 
     companion object {

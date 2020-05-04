@@ -35,4 +35,7 @@ object TcnConstants {
 
     private const val H_TCK_DOMAIN_SEPARATOR_STRING = "H_TCK"
     val H_TCK_DOMAIN_SEPARATOR = H_TCK_DOMAIN_SEPARATOR_STRING.toByteArray(Charsets.UTF_8)
+
+    const val WAKELOCK_TAG = "org:tcn-coalition:alarm-receiver"
+    const val WAKELOCK_DURATION = 10000 // This should be set to the longest amount of time it would take to do a scan
 }
