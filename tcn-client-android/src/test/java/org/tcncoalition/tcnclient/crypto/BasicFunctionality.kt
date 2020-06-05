@@ -43,7 +43,7 @@ class BasicFunctionality {
 
         // Check that the recomputed TCNs match the originals.
         // The slice is offset by 1 because tcn_0 is not included.
-        assertEquals(tcns.slice(20 - 1 until 90 - 1), recomputedTcns)
+        assertEquals(tcns.slice(20 - 1 until 90), recomputedTcns)
     }
 
     @ExperimentalTime

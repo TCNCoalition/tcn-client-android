@@ -94,13 +94,14 @@ class Report(
     ) :
         Iterator<TemporaryContactNumber> {
         @ExperimentalUnsignedTypes
-        override fun hasNext(): Boolean {
-            return tck.index.uShort < end.uShort
-        }
+        override fun hasNext(): Boolean =
+            tck.index.uShort <= end.uShort
 
         override fun next(): TemporaryContactNumber {
             val tcn = tck.temporaryContactNumber
-            tck = tck.ratchet()!! // We do not ratchet past end <= UShort.MAX_VALUE.
+            tck.ratchet()?.also { // We do not ratchet past end <= UShort.MAX_VALUE.
+                tck = it
+            }
             return tcn
         }
     }
