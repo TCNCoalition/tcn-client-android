@@ -14,6 +14,11 @@ enum class MemoType(internal val t: Byte) {
     /** The CovidWatch test data format, version 1 (TBD) */
     CovidWatchV1(1),
 
+    /**
+     * The HutchTrace app data format
+     */
+    HutchTraceV1(3),
+
     /** Reserved for future use. */
     Reserved(-1);
 
@@ -24,6 +29,7 @@ enum class MemoType(internal val t: Byte) {
             return when (t.toInt()) {
                 0 -> CoEpiV1
                 1 -> CovidWatchV1
+                3 -> HutchTraceV1
                 else -> throw UnknownMemoType(t)
             }
         }
