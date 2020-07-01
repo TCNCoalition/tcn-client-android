@@ -5,9 +5,11 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.os.PowerManager
-import org.tcncoalition.tcnclient.TcnClient
 import org.tcncoalition.tcnclient.TcnConstants.WAKELOCK_DURATION
 import org.tcncoalition.tcnclient.TcnConstants.WAKELOCK_TAG
+import org.tcncoalition.tcnclient.bluetooth.TcnBluetoothService
+import org.tcncoalition.tcnclient.bluetooth.TcnBluetoothService.LocalBinder
+
 
 class ChangeOwnTcnReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context?, intent: Intent?) {
@@ -16,7 +18,9 @@ class ChangeOwnTcnReceiver : BroadcastReceiver() {
             val wl = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, WAKELOCK_TAG)
             wl.acquire(WAKELOCK_DURATION.toLong())
 
-            TcnClient.tcnManager?.changeOwnTcn()
+            val binder = peekService(it, Intent(context, TcnBluetoothService::class.java))
+            val service: TcnBluetoothService = (binder as LocalBinder).service
+            service.changeOwnTcn()
 
             wl.release()
         }
