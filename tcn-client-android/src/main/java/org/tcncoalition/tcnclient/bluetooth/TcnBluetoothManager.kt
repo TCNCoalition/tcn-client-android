@@ -1,5 +1,6 @@
 package org.tcncoalition.tcnclient.bluetooth
 
+import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothGatt
 import android.bluetooth.BluetoothGattCharacteristic
@@ -179,11 +180,16 @@ class TcnBluetoothManager(
         // state on old Android devices.
         handler.removeCallbacksAndMessages(null)
         handler.postDelayed({
-            if (isStarted) {
+            val adapter = BluetoothAdapter.getDefaultAdapter()
+            if (isStarted && adapter != null && adapter.isEnabled) {
                 Log.i(TAG, "Restarting scan...")
                 // If there are outstanding scan results then flush them so we can process them now
                 // in onBatchScanResults
-                scanner.flushPendingScanResults(scanCallback)
+                try {
+                    scanner.flushPendingScanResults(scanCallback)
+                } catch (t: Throwable) {
+                    Log.e(TAG, "Scanner couldn't flush pending scan results: $t")
+                }
                 stopScan()
                 startScan()
             }
