@@ -4,7 +4,9 @@ import android.app.PendingIntent
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.os.IBinder
 import android.os.PowerManager
+import android.util.Log
 import org.tcncoalition.tcnclient.TcnConstants.WAKELOCK_DURATION
 import org.tcncoalition.tcnclient.TcnConstants.WAKELOCK_TAG
 import org.tcncoalition.tcnclient.bluetooth.TcnBluetoothService
@@ -18,9 +20,14 @@ class ChangeOwnTcnReceiver : BroadcastReceiver() {
             val wl = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, WAKELOCK_TAG)
             wl.acquire(WAKELOCK_DURATION.toLong())
 
-            val binder = peekService(it, Intent(context, TcnBluetoothService::class.java))
-            val service: TcnBluetoothService = (binder as LocalBinder).service
-            service.changeOwnTcn()
+            val binder: IBinder? = peekService(it, Intent(context, TcnBluetoothService::class.java))
+            if (binder != null) {
+                val service: TcnBluetoothService = (binder as LocalBinder).service
+                service.changeOwnTcn()
+            } else {
+                // Can happen if called before bindService is called
+                Log.v(ChangeOwnTcnReceiver::javaClass.name, "Binder is null")
+            }
 
             wl.release()
         }
