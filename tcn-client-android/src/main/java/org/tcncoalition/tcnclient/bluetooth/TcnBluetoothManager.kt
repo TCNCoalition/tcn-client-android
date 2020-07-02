@@ -409,6 +409,9 @@ class TcnBluetoothManager(
                             // We act as a bridge and advertise these TCNs so iOS apps can discover
                             // each other while in the background.
                             if (device != null) {
+                                if (inRangeBleAddressToTcnMap.containsKey(device.address)) {
+                                    dequeueFromAdvertising(inRangeBleAddressToTcnMap[device.address], true)
+                                }
                                 inRangeBleAddressToTcnMap[device.address] = value
                                 enqueueForAdvertising(value, false)
                             }
