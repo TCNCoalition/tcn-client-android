@@ -31,6 +31,32 @@ import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 
+/**
+ * Entry object of the advertising queue
+ */
+data class AdvertisingEntry(
+    val tcn: ByteArray,
+    var hasAdvertised: Boolean
+) {
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (javaClass != other?.javaClass) return false
+
+        other as AdvertisingEntry
+
+        if (!tcn.contentEquals(other.tcn)) return false
+        if (hasAdvertised != other.hasAdvertised) return false
+
+        return true
+    }
+
+    override fun hashCode(): Int {
+        var result = tcn.contentHashCode()
+        result = 31 * result + hasAdvertised.hashCode()
+        return result
+    }
+}
+
 class TcnBluetoothManager(
     private val context: Context,
     private val scanner: BluetoothLeScanner,
@@ -42,7 +68,7 @@ class TcnBluetoothManager(
 
     private var isStarted: Boolean = false
     private var generatedTcn = ByteArray(0)
-    private var tcnAdvertisingQueue = ArrayList<ByteArray>()
+    private var tcnAdvertisingQueue = ArrayList<AdvertisingEntry>()
     private var inRangeBleAddressToTcnMap = mutableMapOf<String, ByteArray>()
     private var estimatedDistanceToRemoteDeviceAddressMap = mutableMapOf<String, Double>()
 
@@ -111,7 +137,7 @@ class TcnBluetoothManager(
         executor?.execute {
             Log.i(TAG, "Changing own TCN ...")
             // Remove current TCN from the advertising queue.
-            dequeueFromAdvertising(generatedTcn)
+            dequeueFromAdvertising(generatedTcn, true)
             val tcn = tcnCallback.generateTcn()
             Log.i(TAG, "Did generate TCN=${Base64.encodeToString(tcn, Base64.NO_WRAP)}")
             generatedTcn = tcn
@@ -123,18 +149,32 @@ class TcnBluetoothManager(
         }
     }
 
-    private fun dequeueFromAdvertising(tcn: ByteArray?) {
-        tcn ?: return
-        tcnAdvertisingQueue.remove(tcn)
-        Log.i(TAG, "Dequeued TCN=${Base64.encodeToString(tcn, Base64.NO_WRAP)} from advertising")
+    /**
+     * Remove TCN from advertising queue
+     * @param forceRemove if true, remove the entry even if it has not been advertised
+     * @return true if successfully removed
+     */
+    private fun dequeueFromAdvertising(tcn: ByteArray?, forceRemove: Boolean = false): Boolean {
+        val index =
+            tcnAdvertisingQueue.indexOfFirst { (forceRemove || it.hasAdvertised) && it.tcn === tcn }    // remove TCN from the queue only if it has been advertised
+        if (index >= 0) {
+            tcnAdvertisingQueue.removeAt(index)
+            Log.i(TAG, "Dequeued TCN=${Base64.encodeToString(tcn, Base64.NO_WRAP)} from advertising")
+            return true
+        } else {
+            return false
+        }
     }
 
-    private fun enqueueForAdvertising(tcn: ByteArray?, atHead: Boolean = false) {
+    private fun enqueueForAdvertising(
+        tcn: ByteArray?,
+        atHead: Boolean = false
+    ) {
         tcn ?: return
         if (atHead) {
-            tcnAdvertisingQueue.add(0, tcn)
+            tcnAdvertisingQueue.add(0, AdvertisingEntry(tcn, false))
         } else {
-            tcnAdvertisingQueue.add(tcn)
+            tcnAdvertisingQueue.add(AdvertisingEntry(tcn, false))
         }
         Log.i(TAG, "Enqueued TCN=${Base64.encodeToString(tcn, Base64.NO_WRAP)} for advertising")
     }
@@ -228,7 +268,7 @@ class TcnBluetoothManager(
                 val scanRecord = it.scanRecord ?: return@for_each
 
                 val tcnServiceData = scanRecord.serviceData[
-                    ParcelUuid(TcnConstants.UUID_SERVICE)]
+                        ParcelUuid(TcnConstants.UUID_SERVICE)]
 
                 val hintIsAndroid = (tcnServiceData != null)
 
@@ -272,8 +312,9 @@ class TcnBluetoothManager(
             }
             addressesToRemove.forEach {
                 val tcn = inRangeBleAddressToTcnMap[it]
-                dequeueFromAdvertising(tcn)
-                inRangeBleAddressToTcnMap.remove(it)
+                if (dequeueFromAdvertising(tcn)) {
+                    inRangeBleAddressToTcnMap.remove(it)
+                }
             }
 
             // Notify the API user that TCNs which are left in the list are still in range and
@@ -311,16 +352,18 @@ class TcnBluetoothManager(
                     // devices writing a new TCN to us whenever we rotate the TCN (every 20 sec).
                     // iOS devices use the last 4 bytes to identify the Android devices and write
                     // only once a TCN to them.
-                    tcnAdvertisingQueue.first() + generatedTcn.sliceArray(0..3)
+                    tcnAdvertisingQueue.first().tcn + generatedTcn.sliceArray(0..3)
                 )
                 .build()
+
+            tcnAdvertisingQueue.first().hasAdvertised = true
 
             advertiser.startAdvertising(settings, data, advertisingCallback)
             Log.i(
                 TAG, "Started advertising TCN=${Base64.encodeToString(
-                    tcnAdvertisingQueue.first(),
+                    tcnAdvertisingQueue.first().tcn,
                     Base64.NO_WRAP
-                )} isOwn=${tcnAdvertisingQueue.first().contentEquals(generatedTcn)}"
+                )} isOwn=${tcnAdvertisingQueue.first().tcn.contentEquals(generatedTcn)}"
             )
         } catch (exception: Exception) {
             Log.e(TAG, "Start advertising failed: $exception")
@@ -372,8 +415,11 @@ class TcnBluetoothManager(
                             // We act as a bridge and advertise these TCNs so iOS apps can discover
                             // each other while in the background.
                             if (device != null) {
+                                if (inRangeBleAddressToTcnMap.containsKey(device.address)) {
+                                    dequeueFromAdvertising(inRangeBleAddressToTcnMap[device.address], true)
+                                }
                                 inRangeBleAddressToTcnMap[device.address] = value
-                                enqueueForAdvertising(value)
+                                enqueueForAdvertising(value, false)
                             }
                         } else {
                             result = BluetoothGatt.GATT_FAILURE
